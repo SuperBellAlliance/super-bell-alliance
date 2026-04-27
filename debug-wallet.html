@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Nintondo Wallet Debug</title>
+<style>
+body{font-family:monospace;background:#000;color:#0f0;padding:2rem}
+button{background:#FF6B1A;color:#000;border:none;padding:0.75rem 2rem;font-size:1rem;cursor:pointer;margin:0.5rem}
+pre{background:#111;padding:1rem;border:1px solid #333;white-space:pre-wrap;word-break:break-all}
+.ok{color:#0f0}.err{color:#f00}.warn{color:#ff0}
+</style>
+</head>
+<body>
+<h2>🔍 Nintondo Wallet Debug Page</h2>
+<p>This page helps diagnose the wallet connection issue.</p>
+
+<button onclick="runDiagnostic()">Run Full Diagnostic</button>
+<button onclick="tryConnect()">Try Connect</button>
+<button onclick="clearLog()">Clear Log</button>
+
+<pre id="log">Click "Run Full Diagnostic" to start...</pre>
+
+<script>
+const log = document.getElementById('log');
+function addLog(msg, type=''){
+  const span = document.createElement('span');
+  span.className = type;
+  span.textContent = msg + '\n';
+  log.appendChild(span);
+  log.scrollTop = log.scrollHeight;
+}
+function clearLog(){ log.innerHTML = ''; }
+
+async function runDiagnostic(){
+  clearLog();
+  addLog('=== NINTONDO WALLET DIAGNOSTIC ===\n');
+  
+  // 1. Check window object
+  addLog('1. Checking window object...');
+  const windowKeys = Object.keys(window).filter(k => 
+    k.toLowerCase().includes('nint') || 
+    k.toLowerCase().includes('bells') || 
+    k.toLowerCase().includes('bitcoin') ||
+    k.toLowerCase().includes('wallet') ||
+    k.toLowerCase().includes('web3')
+  );
+  addLog('   Relevant window keys: ' + JSON.stringify(windowKeys), windowKeys.length > 0 ? 'ok' : 'warn');
+  
+  // 2. Check specific providers
+  const providers = ['nintondo', 'bells', 'belscoin', 'nintondoWallet', 'nintondoBells'];
+  for(const p of providers){
+    if(window[p]){
+      addLog(`   ✅ window.${p} FOUND!`, 'ok');
+      addLog(`   Type: ${typeof window[p]}`);
+      if(typeof window[p] === 'object'){
+        addLog(`   Methods: ${Object.keys(window[p]).join(', ')}`);
+      }
+    } else {
+      addLog(`   ❌ window.${p} not found`, 'warn');
+    }
+  }
+  
+  // 3. Wait and recheck
+  addLog('\n2. Waiting 3 seconds and rechecking...');
+  await new Promise(r => setTimeout(r, 3000));
+  for(const p of providers){
+    if(window[p]){
+      addLog(`   ✅ window.${p} found after wait!`, 'ok');
+      addLog(`   Methods: ${Object.keys(window[p]).join(', ')}`);
+    }
+  }
+  
+  // 4. Check chrome extension message passing
+  addLog('\n3. Checking Chrome extension APIs...');
+  if(window.chrome && window.chrome.runtime){
+    addLog('   Chrome runtime available - extension messaging possible', 'ok');
+  } else {
+    addLog('   Chrome runtime not available', 'warn');
+  }
+  
+  // 5. Check event listeners
+  addLog('\n4. Listening for wallet events (10 seconds)...');
+  const eventNames = ['nintondo#initialized', 'bells#initialized', 'message'];
+  eventNames.forEach(evt => {
+    window.addEventListener(evt, (e) => {
+      addLog(`   📡 Event received: ${evt}`, 'ok');
+      addLog(`   Data: ${JSON.stringify(e.data || e.detail)}`);
+    });
+  });
+  
+  setTimeout(() => {
+    addLog('   Event listening complete');
+    addLog('\n=== DIAGNOSTIC COMPLETE ===');
+    addLog('\nIf window.nintondo was NOT found, the extension is not injecting into this page.');
+    addLog('This could be because:');
+    addLog('  1. Extension permissions dont include this domain');
+    addLog('  2. Extension needs to be enabled for this site');
+    addLog('  3. Page needs to be refreshed after extension install');
+  }, 10000);
+}
+
+async function tryConnect(){
+  addLog('\n=== TRYING TO CONNECT ===');
+  
+  if(!window.nintondo){
+    addLog('window.nintondo not found!', 'err');
+    addLog('Trying to find provider anywhere...', 'warn');
+    
+    // Try all possible locations
+    const tryList = [
+      window.nintondo, window.bells, window.belscoin,
+      window.nintondoWallet, window.nintondoBells
+    ];
+    
+    const provider = tryList.find(p => p != null);
+    if(!provider){
+      addLog('No provider found in any location!', 'err');
+      addLog('Extension may not be injecting into this page.', 'err');
+      return;
+    }
+  }
+  
+  const provider = window.nintondo;
+  addLog('Provider found: ' + typeof provider, 'ok');
+  addLog('Methods: ' + Object.keys(provider).join(', '));
+  
+  // Try each method
+  const methods = Object.keys(provider).filter(k => typeof provider[k] === 'function');
+  for(const method of methods.slice(0, 10)){
+    addLog(`\nTrying provider.${method}()...`);
+    try {
+      const result = await provider[method]();
+      addLog(`  Result: ${JSON.stringify(result)}`, 'ok');
+      if(result) break;
+    } catch(e){
+      addLog(`  Error: ${e.message}`, 'warn');
+    }
+  }
+}
+</script>
+</body>
+</html>

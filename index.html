@@ -1054,97 +1054,144 @@ function copyAddr(){
 /* ── WALLET ── */
 
 
-// ============================================================
-// NINTONDO WALLET CONNECTION — DEFINITIVE VERSION
-// ============================================================
-const NINTONDO_INSTALL_URL = 'https://chromewebstore.google.com/detail/nintondo-wallet/akkmagafhjjjjclaejjomkeccmjhdkpa';
 
-// Debug: log all available wallet methods
-function debugWallet(){
-  if(window.nintondo){
-    console.log('Nintondo wallet found!');
-    console.log('Methods:', Object.keys(window.nintondo));
-  } else {
-    console.log('window.nintondo not found');
-    console.log('All window keys with "nint":', Object.keys(window).filter(k=>k.toLowerCase().includes('nint')));
+
+// ============================================================
+// NINTONDO WALLET - DEFINITIVE CONNECTION v3
+// Based on how nintondo.io itself connects to the wallet
+// ============================================================
+
+const NINTONDO_INSTALL = 'https://chromewebstore.google.com/detail/nintondo-wallet/akkmagafhjjjjclaejjomkeccmjhdkpa';
+
+// Listen for wallet ready event
+let walletReadyResolver;
+const walletReadyPromise = new Promise(resolve => {
+  walletReadyResolver = resolve;
+});
+
+// The extension dispatches this event when ready
+window.addEventListener('nintondo#initialized', () => {
+  console.log('✅ nintondo#initialized event received!');
+  walletReadyResolver(window.nintondo);
+});
+
+// Also check on DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+  if(window.nintondo) walletReadyResolver(window.nintondo);
+});
+
+// And immediately
+if(window.nintondo) walletReadyResolver(window.nintondo);
+
+async function getNintondoProvider(timeoutMs = 5000){
+  // First try immediate
+  if(window.nintondo) return window.nintondo;
+  if(window.bells) return window.bells;
+  
+  // Then wait for initialized event or timeout
+  const timeoutPromise = new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('timeout')), timeoutMs)
+  );
+  
+  try {
+    const provider = await Promise.race([walletReadyPromise, timeoutPromise]);
+    return provider;
+  } catch(e) {
+    // Last resort: poll
+    for(let i = 0; i < 20; i++){
+      await new Promise(r => setTimeout(r, 250));
+      if(window.nintondo) return window.nintondo;
+      if(window.bells) return window.bells;
+    }
+    return null;
   }
 }
 
-async function getNintondoProvider(){
-  // Wait up to 5 seconds for extension to inject
-  for(let i = 0; i < 50; i++){
-    if(window.nintondo) return window.nintondo;
-    // Also check alternative injection points
-    if(window.bells) return window.bells;
-    if(window.belscoin) return window.belscoin;
-    await new Promise(r => setTimeout(r, 100));
+async function connectNintondoWallet(){
+  console.log('🔌 Attempting wallet connection...');
+  
+  const provider = await getNintondoProvider();
+  
+  if(!provider){
+    console.error('❌ No Nintondo provider found');
+    // Log what IS available
+    const walletKeys = Object.keys(window).filter(k => 
+      !['0','1','2'].includes(k) && 
+      (k.includes('nint') || k.includes('bell') || k.includes('wallet'))
+    );
+    console.log('Available wallet-related keys:', walletKeys);
+    return null;
   }
-  return null;
-}
-
-async function getWalletAddress(provider){
-  // Try every possible method the Nintondo wallet might expose
-  const methods = [
-    // Method 1: Standard Web3 requestAccounts
-    async () => {
-      const accs = await provider.requestAccounts();
-      return Array.isArray(accs) ? accs[0] : accs;
-    },
-    // Method 2: getAccounts (already connected)
-    async () => {
-      const accs = await provider.getAccounts();
-      return Array.isArray(accs) ? accs[0] : accs;
-    },
-    // Method 3: connect with network
-    async () => {
-      const result = await provider.connect('bells');
-      if(typeof result === 'string') return result;
-      if(result && result.address) return result.address;
-      if(Array.isArray(result)) return result[0];
-      return result;
-    },
-    // Method 4: connect with no args
-    async () => {
-      const result = await provider.connect();
-      if(typeof result === 'string') return result;
-      if(result && result.address) return result.address;
-      if(Array.isArray(result)) return result[0];
-      return result;
-    },
-    // Method 5: request method (EIP-1193 style)
-    async () => {
-      const accs = await provider.request({ method: 'requestAccounts' });
-      return Array.isArray(accs) ? accs[0] : accs;
-    },
-    // Method 6: request eth style
-    async () => {
-      const accs = await provider.request({ method: 'bells_requestAccounts' });
-      return Array.isArray(accs) ? accs[0] : accs;
-    },
-    // Method 7: selectedAddress (already unlocked)
-    async () => {
-      if(provider.selectedAddress) return provider.selectedAddress;
-      throw new Error('No selectedAddress');
-    },
-    // Method 8: accounts property
-    async () => {
-      if(provider.accounts && provider.accounts.length > 0) return provider.accounts[0];
-      throw new Error('No accounts property');
-    },
-  ];
-
-  for(const method of methods){
+  
+  console.log('✅ Provider found:', typeof provider);
+  console.log('Available methods:', Object.getOwnPropertyNames(provider));
+  
+  // Try requestAccounts first (standard)
+  if(typeof provider.requestAccounts === 'function'){
     try{
-      const addr = await method();
-      if(addr && typeof addr === 'string' && addr.length > 10){
-        console.log('✅ Wallet connected with method:', methods.indexOf(method) + 1, 'Address:', addr);
-        return addr;
-      }
-    } catch(e){
-      console.log('Method', methods.indexOf(method) + 1, 'failed:', e.message);
+      console.log('Trying requestAccounts()...');
+      const accounts = await provider.requestAccounts();
+      const addr = Array.isArray(accounts) ? accounts[0] : accounts;
+      if(addr){ console.log('✅ Got address:', addr); return addr; }
+    }catch(e){ console.log('requestAccounts failed:', e.message); }
+  }
+  
+  // Try getAccounts
+  if(typeof provider.getAccounts === 'function'){
+    try{
+      console.log('Trying getAccounts()...');
+      const accounts = await provider.getAccounts();
+      const addr = Array.isArray(accounts) ? accounts[0] : accounts;
+      if(addr){ console.log('✅ Got address via getAccounts:', addr); return addr; }
+    }catch(e){ console.log('getAccounts failed:', e.message); }
+  }
+  
+  // Try connect
+  if(typeof provider.connect === 'function'){
+    for(const arg of ['bells', undefined, 'bellsMainnet']){
+      try{
+        console.log('Trying connect(' + arg + ')...');
+        const result = await provider.connect(arg);
+        const addr = typeof result === 'string' ? result : 
+                     result?.address || (Array.isArray(result) ? result[0] : null);
+        if(addr){ console.log('✅ Got address via connect:', addr); return addr; }
+      }catch(e){ console.log('connect(' + arg + ') failed:', e.message); }
     }
   }
-  throw new Error('All connection methods failed. Please unlock your Nintondo wallet and try again.');
+  
+  // Try selectedAddress
+  if(provider.selectedAddress){
+    console.log('✅ Got selectedAddress:', provider.selectedAddress);
+    return provider.selectedAddress;
+  }
+  
+  throw new Error('Connected to wallet but could not get address. Please check wallet is unlocked.');
+}
+
+
+async function connectWallet(){
+  const btn = document.querySelector('.connect-btn');
+  if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
+  
+  try{
+    const addr = await connectNintondoWallet();
+    if(!addr) throw new Error('No address returned from wallet');
+    walletAddr = addr;
+    showWalletConnected(addr);
+  } catch(e){
+    if(btn){ btn.textContent='Connect Wallet'; btn.disabled=false; }
+    if(e.message === 'timeout' || e.message.includes('timeout')){
+      const install = confirm('Nintondo Wallet not detected.
+
+Install it from the Chrome Web Store?
+Click OK to install.');
+      if(install) window.open(NINTONDO_INSTALL, '_blank');
+    } else {
+      alert('Connection failed: ' + e.message + '
+
+Make sure your Nintondo wallet is unlocked.');
+    }
+  }
 }
 
 async function connectWallet(){
