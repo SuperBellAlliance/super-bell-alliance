@@ -1056,23 +1056,27 @@ function copyAddr(){
 
 
 
-async function connectWallet(){
-  const btn=document.querySelector('.connect-btn');
-  if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
-  try{
-    if(!window.nintondo){
-      alert('Nintondo Wallet not detected.
 
-Install the Nintondo Wallet browser extension from nintondo.io, then refresh this page.');
-      if(btn){ btn.textContent='Connect Wallet'; btn.disabled=false; }
-      return;
-    }
-    const addr=await window.nintondo.connect('bellsMainnet');
-    walletAddr=addr;
+// ============================================================
+// NINTONDO WALLET CONNECTION - CORRECT VERSION
+// Works with both old and new Nintondo wallet extension
+// ============================================================
+
+
+async function connectWallet(){
+  const btn = document.querySelector('.connect-btn');
+  try{
+    if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
+    const addr = await window.nintondo.connect('bellsMainnet');
+    walletAddr = addr;
     showWalletConnected(addr);
   }catch(e){
-    alert('Connection failed: '+(e.message||e));
     if(btn){ btn.textContent='Connect Wallet'; btn.disabled=false; }
+    if(typeof window.nintondo === 'undefined'){
+      alert('Please install Nintondo Wallet extension first, then refresh the page.');
+    } else {
+      alert('Error: ' + e.message);
+    }
   }
 }
 
