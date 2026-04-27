@@ -1127,52 +1127,60 @@ async function confirmMint(){
   const mintBtn = document.getElementById('mint-btn');
   statusLog.classList.add('show');
   statusLog.innerHTML = '';
+
   function addLog(msg, cls=''){
     const ts = new Date().toTimeString().slice(0,5);
     statusLog.innerHTML = '<div class="log-line"><span class="log-ts">['+ts+']</span><span class="log-msg '+cls+'">'+msg+'</span></div>' + statusLog.innerHTML;
   }
+
   const total = qty * MINT_PRICE;
-  addLog('Order: '+qty+' hero(es) = '+total+' BEL total', 'active');
+  const totalSats = Math.round(total * 100000000); // Convert BEL to satoshis
+  addLog('Order confirmed: '+qty+' hero(es) × '+MINT_PRICE+' BEL = '+total+' BEL', 'active');
 
-  if(window.nintondo && walletAddr){
-    // Log available methods to console for debugging
-    const allMethods = Object.keys(window.nintondo).filter(k=>typeof window.nintondo[k]==='function');
-    console.log('Available Nintondo methods:', allMethods);
-    addLog('Wallet connected: '+walletAddr.slice(0,8)+'...', '');
+  if(!window.nintondo || !walletAddr){
+    addLog('Wallet not connected. Please connect first.', 'err');
+    if(mintBtn) mintBtn.disabled = false;
+    return;
+  }
 
-    // Try each possible payment method name
-    const tryMethods = ['sendBells','sendBEL','sendCoins','send','transfer','sendTransaction','payment'];
-    let success = false;
-    for(const m of tryMethods){
-      if(typeof window.nintondo[m]==='function'){
-        addLog('Trying wallet payment ('+m+')...','active');
-        try{
-          const result = await window.nintondo[m]({to:PAYMENT_ADDR,amount:total,feeRate:1});
-          addLog('✅ Payment sent! TX: '+String(result).slice(0,16)+'...','ok');
-          addLog('⏳ Inscription will arrive in ~10 minutes','active');
-          if(mintBtn) mintBtn.disabled=true;
-          success=true;
-          break;
-        }catch(e){
-          console.log(m+' error:',e);
-          if(e.code===4001||(e.message&&e.message.toLowerCase().includes('reject'))){
-            addLog('❌ Payment rejected in wallet.','err');
-            if(mintBtn) mintBtn.disabled=false;
-            return;
-          }
-        }
-      }
+  try{
+    addLog('Requesting payment from Nintondo wallet...', 'active');
+    if(mintBtn) mintBtn.disabled = true;
+
+    // CORRECT METHOD from official Nintondo docs: createTx
+    // Amount is in SATOSHIS (1 BEL = 100,000,000 satoshis)
+    const signedTxHex = await window.nintondo.createTx({
+      to: PAYMENT_ADDR,
+      amount: totalSats,
+      receiverToPayFee: false,
+      feeRate: 10
+    });
+
+    if(!signedTxHex){
+      throw new Error('No transaction returned from wallet');
     }
-    if(!success){
-      addLog('Auto-pay not supported — please send manually:','warn');
-      addLog('Copy address above → send '+total+' BEL → done!','active');
+
+    addLog('✅ Transaction signed! Broadcasting to network...', 'ok');
+    addLog('TX: '+signedTxHex.slice(0,20)+'...', '');
+    addLog('⏳ Waiting for confirmation (~10 min)...', 'active');
+    addLog('Your inscription will be sent to your wallet automatically after confirmation.', '');
+
+    // Store tx for reference
+    console.log('Full signed TX hex:', signedTxHex);
+
+  } catch(e){
+    console.error('Payment error:', e);
+    if(e.code === 4001 || (e.message && e.message.toLowerCase().includes('reject'))){
+      addLog('❌ Payment rejected. You can try again.', 'err');
+      if(mintBtn) mintBtn.disabled = false;
+    } else if(e.message && e.message.toLowerCase().includes('insufficient')){
+      addLog('❌ Insufficient BEL balance. You need '+total+' BEL + network fee.', 'err');
+      if(mintBtn) mintBtn.disabled = false;
+    } else {
+      addLog('❌ Error: '+(e.message||String(e)), 'err');
+      addLog('Please send '+total+' BEL manually to the address above.', 'warn');
       copyAddr();
-      if(mintBtn) mintBtn.disabled=false;
+      if(mintBtn) mintBtn.disabled = false;
     }
-  } else {
-    addLog('Send exactly '+total+' BEL to address above','active');
-    addLog('Inscription delivered within ~10 min of confirmation','');
-    copyAddr();
-    if(mintBtn) mintBtn.disabled=false;
   }
 }
