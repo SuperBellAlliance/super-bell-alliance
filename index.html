@@ -1056,190 +1056,26 @@ function copyAddr(){
 
 
 
-// ============================================================
-// NINTONDO WALLET - DEFINITIVE CONNECTION v3
-// Based on how nintondo.io itself connects to the wallet
-// ============================================================
-
-const NINTONDO_INSTALL = 'https://chromewebstore.google.com/detail/nintondo-wallet/akkmagafhjjjjclaejjomkeccmjhdkpa';
-
-// Listen for wallet ready event
-let walletReadyResolver;
-const walletReadyPromise = new Promise(resolve => {
-  walletReadyResolver = resolve;
-});
-
-// The extension dispatches this event when ready
-window.addEventListener('nintondo#initialized', () => {
-  console.log('✅ nintondo#initialized event received!');
-  walletReadyResolver(window.nintondo);
-});
-
-// Also check on DOMContentLoaded
-document.addEventListener('DOMContentLoaded', () => {
-  if(window.nintondo) walletReadyResolver(window.nintondo);
-});
-
-// And immediately
-if(window.nintondo) walletReadyResolver(window.nintondo);
-
-async function getNintondoProvider(timeoutMs = 5000){
-  // First try immediate
-  if(window.nintondo) return window.nintondo;
-  if(window.bells) return window.bells;
-  
-  // Then wait for initialized event or timeout
-  const timeoutPromise = new Promise((_, reject) => 
-    setTimeout(() => reject(new Error('timeout')), timeoutMs)
-  );
-  
-  try {
-    const provider = await Promise.race([walletReadyPromise, timeoutPromise]);
-    return provider;
-  } catch(e) {
-    // Last resort: poll
-    for(let i = 0; i < 20; i++){
-      await new Promise(r => setTimeout(r, 250));
-      if(window.nintondo) return window.nintondo;
-      if(window.bells) return window.bells;
-    }
-    return null;
-  }
-}
-
-async function connectNintondoWallet(){
-  console.log('🔌 Attempting wallet connection...');
-  
-  const provider = await getNintondoProvider();
-  
-  if(!provider){
-    console.error('❌ No Nintondo provider found');
-    // Log what IS available
-    const walletKeys = Object.keys(window).filter(k => 
-      !['0','1','2'].includes(k) && 
-      (k.includes('nint') || k.includes('bell') || k.includes('wallet'))
-    );
-    console.log('Available wallet-related keys:', walletKeys);
-    return null;
-  }
-  
-  console.log('✅ Provider found:', typeof provider);
-  console.log('Available methods:', Object.getOwnPropertyNames(provider));
-  
-  // Try requestAccounts first (standard)
-  if(typeof provider.requestAccounts === 'function'){
-    try{
-      console.log('Trying requestAccounts()...');
-      const accounts = await provider.requestAccounts();
-      const addr = Array.isArray(accounts) ? accounts[0] : accounts;
-      if(addr){ console.log('✅ Got address:', addr); return addr; }
-    }catch(e){ console.log('requestAccounts failed:', e.message); }
-  }
-  
-  // Try getAccounts
-  if(typeof provider.getAccounts === 'function'){
-    try{
-      console.log('Trying getAccounts()...');
-      const accounts = await provider.getAccounts();
-      const addr = Array.isArray(accounts) ? accounts[0] : accounts;
-      if(addr){ console.log('✅ Got address via getAccounts:', addr); return addr; }
-    }catch(e){ console.log('getAccounts failed:', e.message); }
-  }
-  
-  // Try connect
-  if(typeof provider.connect === 'function'){
-    for(const arg of ['bells', undefined, 'bellsMainnet']){
-      try{
-        console.log('Trying connect(' + arg + ')...');
-        const result = await provider.connect(arg);
-        const addr = typeof result === 'string' ? result : 
-                     result?.address || (Array.isArray(result) ? result[0] : null);
-        if(addr){ console.log('✅ Got address via connect:', addr); return addr; }
-      }catch(e){ console.log('connect(' + arg + ') failed:', e.message); }
-    }
-  }
-  
-  // Try selectedAddress
-  if(provider.selectedAddress){
-    console.log('✅ Got selectedAddress:', provider.selectedAddress);
-    return provider.selectedAddress;
-  }
-  
-  throw new Error('Connected to wallet but could not get address. Please check wallet is unlocked.');
-}
-
-
 async function connectWallet(){
-  const btn = document.querySelector('.connect-btn');
+  const btn=document.querySelector('.connect-btn');
   if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
-  
   try{
-    const addr = await connectNintondoWallet();
-    if(!addr) throw new Error('No address returned from wallet');
-    walletAddr = addr;
-    showWalletConnected(addr);
-  } catch(e){
-    if(btn){ btn.textContent='Connect Wallet'; btn.disabled=false; }
-    if(e.message === 'timeout' || e.message.includes('timeout')){
-      const install = confirm('Nintondo Wallet not detected.
+    if(!window.nintondo){
+      alert('Nintondo Wallet not detected.
 
-Install it from the Chrome Web Store?
-Click OK to install.');
-      if(install) window.open(NINTONDO_INSTALL, '_blank');
-    } else {
-      alert('Connection failed: ' + e.message + '
-
-Make sure your Nintondo wallet is unlocked.');
+Install the Nintondo Wallet browser extension from nintondo.io, then refresh this page.');
+      if(btn){ btn.textContent='Connect Wallet'; btn.disabled=false; }
+      return;
     }
-  }
-}
-
-async function connectWallet(){
-  const btn = document.querySelector('.connect-btn');
-  if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
-  debugWallet();
-  
-  const provider = await getNintondoProvider();
-  
-  if(!provider){
-    if(btn){ btn.textContent='Connect Wallet'; btn.disabled=false; }
-    const install = confirm(
-      'Nintondo Wallet not found!
-
-' +
-      'Please install the Nintondo Wallet Chrome extension.
-
-' +
-      'Click OK to open the install page.'
-    );
-    if(install) window.open(NINTONDO_INSTALL_URL, '_blank');
-    return;
-  }
-  
-  try{
-    const addr = await getWalletAddress(provider);
-    walletAddr = addr;
+    const addr=await window.nintondo.connect('bellsMainnet');
+    walletAddr=addr;
     showWalletConnected(addr);
-  } catch(e){
+  }catch(e){
+    alert('Connection failed: '+(e.message||e));
     if(btn){ btn.textContent='Connect Wallet'; btn.disabled=false; }
-    console.error('Wallet error:', e);
-    alert(
-      'Could not connect wallet.
-
-' +
-      'Please make sure:
-' +
-      '1. Nintondo Wallet is installed and unlocked
-' +
-      '2. You are on the correct network (Bellscoin)
-' +
-      '3. The wallet has permission to connect to this site
-
-' +
-      'Error: ' + e.message
-    );
   }
 }
+
 
 function disconnectWallet(){
   try{if(window.nintondo)window.nintondo.disconnect();}catch(e){}
