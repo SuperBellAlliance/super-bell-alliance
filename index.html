@@ -985,6 +985,7 @@ const featuredData = [
 ];
 let featIdx = 0;
 function setFeatured(el){
+  if(!el) return;
   document.querySelectorAll('.feat-thumb').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
   const img = document.getElementById('feat-img');
@@ -998,14 +999,17 @@ function setFeatured(el){
 setInterval(()=>{
   featIdx=(featIdx+1)%4;
   const thumbs = document.querySelectorAll('.feat-thumb');
-  setFeatured(thumbs[featIdx]);
+  if(thumbs && thumbs[featIdx]) setFeatured(thumbs[featIdx]);
 }, 3500);
 
 /* ── PROGRESS ── */
 function updateProgress(){
   const pct = ((mintedCount/TOTAL)*100).toFixed(1);
-  document.getElementById('prog-fill').style.width=pct+'%';
-  document.getElementById('prog-pct').textContent=pct+'%';
+  const pf = document.getElementById('prog-fill');
+  const pp = document.getElementById('prog-pct');
+  const hm = document.getElementById('h-minted');
+  if(pf) pf.style.width=pct+'%';
+  if(pp) pp.textContent=pct+'%';
   document.getElementById('h-minted').textContent=mintedCount.toLocaleString();
 }
 setTimeout(()=>{mintedCount=0;updateProgress();},600);
@@ -1080,6 +1084,19 @@ async function connectWallet(){
   }
 }
 
+
+function showWalletConnected(addr){
+  walletAddr = addr;
+  const short = addr.slice(0,8)+'...'+addr.slice(-6);
+  const display = document.getElementById('wallet-display');
+  if(display) display.textContent = short;
+  const bar = document.getElementById('wallet-bar');
+  if(bar) bar.classList.add('show');
+  const area = document.getElementById('connect-area');
+  if(area) area.style.display = 'none';
+  const mintBtn = document.getElementById('mint-btn');
+  if(mintBtn) mintBtn.style.display = 'block';
+}
 
 function disconnectWallet(){
   try{if(window.nintondo)window.nintondo.disconnect();}catch(e){}
