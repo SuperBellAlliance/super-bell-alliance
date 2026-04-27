@@ -1121,8 +1121,45 @@ function handleMint(){
   document.getElementById('modal').classList.add('show');
 }
 function closeModal(){document.getElementById('modal').classList.remove('show');}
-function confirmMint(){
-  closeModal();copyAddr();
+async function confirmMint(){
+  closeModal();
+  document.getElementById('mint-btn').disabled=true;
+  
+  // Try to trigger wallet payment automatically
+  const total = qty * MINT_PRICE;
+  
+  if(window.nintondo && walletAddr){
+    try{
+      const statusLog = document.getElementById('status-log');
+      statusLog.classList.add('show');
+      statusLog.innerHTML = '<div class="log-line"><span class="log-ts">[--:--]</span><span class="log-msg active">Requesting payment from wallet...</span></div>';
+      
+      // Trigger Nintondo wallet to send BEL
+      const txid = await window.nintondo.sendBEL({
+        to: PAYMENT_ADDR,
+        amount: total,
+        feeRate: 1
+      });
+      
+      statusLog.innerHTML = '<div class="log-line"><span class="log-ts">[--:--]</span><span class="log-msg ok">✅ Payment sent! TX: ' + txid.slice(0,20) + '...</span></div>' + statusLog.innerHTML;
+      simulateOrderStatus();
+      return;
+      
+    } catch(e){
+      // sendBEL not supported or rejected - fall back to manual
+      console.log('Auto-payment failed:', e.message);
+      if(e.code === 4001 || (e.message && e.message.includes('reject'))){
+        // User rejected payment
+        document.getElementById('mint-btn').disabled=false;
+        alert('Payment cancelled. You can still send BEL manually to the payment address.');
+        return;
+      }
+      // Other error - fall through to manual flow
+    }
+  }
+  
+  // Manual fallback - copy address and show instructions
+  copyAddr();
   document.getElementById('mint-btn').disabled=true;
   const log=document.getElementById('status-log');
   log.classList.add('show');log.innerHTML='';
