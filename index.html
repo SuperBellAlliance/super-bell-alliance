@@ -1123,115 +1123,56 @@ function handleMint(){
 function closeModal(){document.getElementById('modal').classList.remove('show');}
 async function confirmMint(){
   closeModal();
-  document.getElementById('mint-btn').disabled=true;
-  
-  // Try to trigger wallet payment automatically
+  const statusLog = document.getElementById('status-log');
+  const mintBtn = document.getElementById('mint-btn');
+  statusLog.classList.add('show');
+  statusLog.innerHTML = '';
+  function addLog(msg, cls=''){
+    const ts = new Date().toTimeString().slice(0,5);
+    statusLog.innerHTML = '<div class="log-line"><span class="log-ts">['+ts+']</span><span class="log-msg '+cls+'">'+msg+'</span></div>' + statusLog.innerHTML;
+  }
   const total = qty * MINT_PRICE;
-  
+  addLog('Order: '+qty+' hero(es) = '+total+' BEL total', 'active');
+
   if(window.nintondo && walletAddr){
-    try{
-      const statusLog = document.getElementById('status-log');
-      statusLog.classList.add('show');
-      statusLog.innerHTML = '<div class="log-line"><span class="log-ts">[--:--]</span><span class="log-msg active">Requesting payment from wallet...</span></div>';
-      
-      // Trigger Nintondo wallet to send BEL
-      const txid = await window.nintondo.sendBEL({
-        to: PAYMENT_ADDR,
-        amount: total,
-        feeRate: 1
-      });
-      
-      statusLog.innerHTML = '<div class="log-line"><span class="log-ts">[--:--]</span><span class="log-msg ok">✅ Payment sent! TX: ' + txid.slice(0,20) + '...</span></div>' + statusLog.innerHTML;
-      simulateOrderStatus();
-      return;
-      
-    } catch(e){
-      // sendBEL not supported or rejected - fall back to manual
-      console.log('Auto-payment failed:', e.message);
-      if(e.code === 4001 || (e.message && e.message.includes('reject'))){
-        // User rejected payment
-        document.getElementById('mint-btn').disabled=false;
-        alert('Payment cancelled. You can still send BEL manually to the payment address.');
-        return;
+    // Log available methods to console for debugging
+    const allMethods = Object.keys(window.nintondo).filter(k=>typeof window.nintondo[k]==='function');
+    console.log('Available Nintondo methods:', allMethods);
+    addLog('Wallet connected: '+walletAddr.slice(0,8)+'...', '');
+
+    // Try each possible payment method name
+    const tryMethods = ['sendBells','sendBEL','sendCoins','send','transfer','sendTransaction','payment'];
+    let success = false;
+    for(const m of tryMethods){
+      if(typeof window.nintondo[m]==='function'){
+        addLog('Trying wallet payment ('+m+')...','active');
+        try{
+          const result = await window.nintondo[m]({to:PAYMENT_ADDR,amount:total,feeRate:1});
+          addLog('✅ Payment sent! TX: '+String(result).slice(0,16)+'...','ok');
+          addLog('⏳ Inscription will arrive in ~10 minutes','active');
+          if(mintBtn) mintBtn.disabled=true;
+          success=true;
+          break;
+        }catch(e){
+          console.log(m+' error:',e);
+          if(e.code===4001||(e.message&&e.message.toLowerCase().includes('reject'))){
+            addLog('❌ Payment rejected in wallet.','err');
+            if(mintBtn) mintBtn.disabled=false;
+            return;
+          }
+        }
       }
-      // Other error - fall through to manual flow
     }
+    if(!success){
+      addLog('Auto-pay not supported — please send manually:','warn');
+      addLog('Copy address above → send '+total+' BEL → done!','active');
+      copyAddr();
+      if(mintBtn) mintBtn.disabled=false;
+    }
+  } else {
+    addLog('Send exactly '+total+' BEL to address above','active');
+    addLog('Inscription delivered within ~10 min of confirmation','');
+    copyAddr();
+    if(mintBtn) mintBtn.disabled=false;
   }
-  
-  // Manual fallback - copy address and show instructions
-  copyAddr();
-  document.getElementById('mint-btn').disabled=true;
-  const log=document.getElementById('status-log');
-  log.classList.add('show');log.innerHTML='';
-  const steps=[
-    {delay:0,msg:'Awaiting payment to vault address...',cls:'active'},
-    {delay:10000,msg:'Payment detected on Bellscoin network.',cls:'active'},
-    {delay:22000,msg:'Confirming transaction (1/3 blocks)...',cls:'active'},
-    {delay:38000,msg:'Confirmed. Randomly selecting inscription from vault...',cls:'active'},
-    {delay:50000,msg:'Signing & broadcasting transfer transaction...',cls:'active'},
-    {delay:62000,msg:'Inscription dispatched to delivery address!',cls:'ok'},
-  ];
-  steps.forEach(s=>{
-    setTimeout(()=>{
-      const now=new Date();
-      const ts='['+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0')+']';
-      const line=`<div class="log-line"><span class="log-ts">${ts}</span><span class="log-msg ${s.cls}">${s.msg}</span></div>`;
-      log.innerHTML=line+log.innerHTML;
-      if(s.cls==='ok'){
-        setTimeout(()=>{
-          document.getElementById('tx-success').classList.add('show');
-          document.getElementById('tx-msg').textContent=
-            `Your ${qty} inscription${qty>1?'s':''} have been dispatched. Check Nintondo Explorer to verify delivery.`;
-          mintedCount+=qty;updateProgress();
-        },800);
-      }
-    },s.delay);
-  });
 }
-
-// THEME TOGGLE
-function toggleTheme(){
-  const body = document.body;
-  const btn = document.getElementById('theme-toggle');
-  const isLight = body.classList.toggle('light');
-  btn.textContent = isLight ? '🌑' : '🌙';
-  btn.title = isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode';
-  localStorage.setItem('sba-theme', isLight ? 'light' : 'dark');
-}
-(function(){
-  const saved = localStorage.getItem('sba-theme');
-  if(saved === 'light'){
-    document.body.classList.add('light');
-    const btn = document.getElementById('theme-toggle');
-    if(btn){ btn.textContent = '🌑'; btn.title = 'Switch to Dark Mode'; }
-  }
-})();
-
-// VISITOR COUNTER - Today + All Time
-(function(){
-  // Hit counter for today (daily)
-  fetch('https://api.countapi.xyz/hit/superballalliance/visits-daily')
-    .then(r=>r.json())
-    .then(d=>{
-      const el = document.getElementById('visit-today');
-      if(el && d && d.value) el.textContent = d.value.toLocaleString();
-    }).catch(()=>{
-      const el = document.getElementById('visit-today');
-      if(el) el.textContent = '—';
-    });
-
-  // Hit counter for all time (total)
-  fetch('https://api.countapi.xyz/hit/superballalliance/visits-total')
-    .then(r=>r.json())
-    .then(d=>{
-      const el = document.getElementById('visit-total');
-      if(el && d && d.value) el.textContent = d.value.toLocaleString();
-    }).catch(()=>{
-      const el = document.getElementById('visit-total');
-      if(el) el.textContent = '—';
-    });
-})();
-
-</script>
-</body>
-</html>
