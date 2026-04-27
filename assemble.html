@@ -619,17 +619,36 @@ async function connectWallet(){
   const btn = document.getElementById('connect-btn');
   try{
     if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
-    showLoad('Waiting for wallet...');
+    
+    // Connect wallet - same method that works on mint page
     const addr = await window.nintondo.connect('bellsMainnet');
     walletAddr = addr;
+    
+    // Show dashboard immediately after connect
+    document.getElementById('connect-screen').style.display='none';
+    document.getElementById('assemble-dash').classList.add('show');
+    
+    const short = addr.slice(0,8)+'...'+addr.slice(-6);
+    const crewAddr = document.getElementById('crew-addr');
+    const crewName = document.getElementById('crew-name');
+    if(crewAddr) crewAddr.textContent = addr;
+    if(crewName) crewName.textContent = short+"'s Crew";
+    
+    // Load heroes
+    showLoad('Loading your heroes...');
     await loadHeroes(addr);
+    
   }catch(e){
     hideLoad();
     if(btn){ btn.textContent='⬡ Connect Nintondo Wallet'; btn.disabled=false; }
     if(typeof window.nintondo === 'undefined'){
-      alert('Please install Nintondo Wallet extension first, then refresh the page.');
+      alert('Nintondo Wallet not detected.
+
+Please install the extension from nintondo.io then refresh.');
+    } else if(e.code === 4001 || (e.message && e.message.toLowerCase().includes('reject'))){
+      alert('Connection rejected. Please approve in your Nintondo wallet.');
     } else {
-      alert('Error: ' + e.message);
+      alert('Connection error: ' + (e.message || String(e)));
     }
   }
 }
