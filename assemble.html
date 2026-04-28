@@ -175,6 +175,7 @@ footer p{font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:var(--mu
   .how-grid{grid-template-columns:1fr}
 }
 </style>
+<script src="wallet.js"></script>
 </head>
 <body>
 
@@ -615,97 +616,9 @@ function getRank(pts){
 // ============================================================
 
 
-async function connectWallet(){
-  const btn = document.getElementById('connect-btn');
-  if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
-  try{
-    const addr = await window.nintondo.connect('bellsMainnet');
-    if(!addr) throw new Error('No address returned');
-    walletAddr = addr;
-    document.getElementById('connect-screen').style.display='none';
-    document.getElementById('assemble-dash').classList.add('show');
-    const short = addr.slice(0,8)+'...'+addr.slice(-6);
-    const crewAddr = document.getElementById('crew-addr');
-    const crewName = document.getElementById('crew-name');
-    if(crewAddr) crewAddr.textContent = addr;
-    if(crewName) crewName.textContent = short+"'s Crew";
-    showLoad('Loading your heroes...');
-    await loadHeroes(addr);
-  }catch(e){
-    if(btn){ btn.textContent='⬡ Connect Nintondo Wallet'; btn.disabled=false; }
-    if(typeof window.nintondo === 'undefined'){
-      alert('Nintondo Wallet not found.\nPlease install it from nintondo.io then refresh this page.');
-    } else {
-      alert('Error: '+(e.message||String(e)));
-    }
-  }
-}
 
-async function connectWallet(){
-  const btn = document.getElementById('connect-btn');
-  if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
-  showLoad('Connecting to Nintondo Wallet...');
 
-  try{
-    // The Nintondo wallet injects window.nintondo
-    // It must be called directly on user interaction
-    if(typeof window.nintondo === 'undefined'){
-      hideLoad();
-      if(btn){ btn.textContent='⬡ Connect Nintondo Wallet'; btn.disabled=false; }
-      
-      // Show install options
-      const choice = confirm(
-        'Nintondo Wallet extension not detected!
 
-' +
-        'Options:
-' +
-        '1. Install Chrome extension (click OK)
-' +
-        '2. Use Web Wallet at wallet.nintondo.io (click Cancel)'
-      );
-      if(choice){
-        window.open('https://chromewebstore.google.com/detail/nintondo-wallet/akkmagafhjjjjclaejjomkeccmjhdkpa', '_blank');
-      } else {
-        window.open('https://wallet.nintondo.io', '_blank');
-        alert('After opening the Web Wallet:
-1. Go back to this page
-2. Click Connect again
-
-Note: Web Wallet connection may have limited dapp support');
-      }
-      return;
-    }
-    
-    // Call connect directly - this triggers the wallet popup
-    const result = await window.nintondo.connect('bellsMainnet');
-    
-    // Handle different return formats
-    let addr;
-    if(typeof result === 'string') addr = result;
-    else if(result && result.address) addr = result.address;
-    else if(Array.isArray(result)) addr = result[0];
-    else addr = String(result);
-    
-    if(!addr || addr === 'undefined'){
-      throw new Error('Wallet connected but no address returned');
-    }
-    
-    walletAddr = addr;
-    await loadHeroes(addr);
-    
-  } catch(e){
-    hideLoad();
-    if(btn){ btn.textContent='⬡ Connect Nintondo Wallet'; btn.disabled=false; }
-    
-    // User rejected
-    if(e.code === 4001 || e.message?.includes('rejected') || e.message?.includes('denied')){
-      alert('Connection rejected. Please approve the connection in your Nintondo wallet.');
-    } else {
-      alert('Connection failed: ' + (e.message || String(e)));
-    }
-  }
-}
 
 
 
@@ -890,6 +803,26 @@ function hideLoad(){ document.getElementById('loading').classList.remove('show')
       if(el&&d&&d.value)el.textContent=d.value.toLocaleString();
     }).catch(()=>{});
 })();
+
+async function connectWallet(){
+  const btn = document.getElementById('connect-btn');
+  if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
+  const addr = await window.SBAWallet.connect();
+  if(addr){
+    walletAddr = addr;
+    document.getElementById('connect-screen').style.display='none';
+    document.getElementById('assemble-dash').classList.add('show');
+    const short = addr.slice(0,8)+'...'+addr.slice(-6);
+    const crewAddr = document.getElementById('crew-addr');
+    const crewName = document.getElementById('crew-name');
+    if(crewAddr) crewAddr.textContent = addr;
+    if(crewName) crewName.textContent = short+"'s Crew";
+    showLoad('Loading your heroes...');
+    await loadHeroes(addr);
+  } else {
+    if(btn){ btn.textContent='⬡ Connect Nintondo Wallet'; btn.disabled=false; }
+  }
+}
 </script>
 </body>
 </html>

@@ -639,6 +639,43 @@ body.light .stats-row{background:rgba(255,255,255,0.9)}
   letter-spacing:0.1em;
 }
 </style>
+<script src="wallet.js">
+async function connectWallet(){
+  const btn = document.querySelector('.connect-btn');
+  if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
+  const addr = await window.SBAWallet.connect();
+  if(addr){
+    showWalletConnected(addr);
+  } else {
+    if(btn){ btn.textContent='Connect Wallet'; btn.disabled=false; }
+  }
+}
+
+function showWalletConnected(addr){
+  walletAddr = addr;
+  const bar = document.getElementById('wallet-bar');
+  if(bar) bar.classList.add('show');
+  const display = document.getElementById('wallet-display');
+  if(display) display.textContent = addr.slice(0,8)+'...'+addr.slice(-6);
+  const connectArea = document.getElementById('connect-area');
+  if(connectArea) connectArea.style.display = 'none';
+  const mintBtn = document.getElementById('mint-btn');
+  if(mintBtn) mintBtn.style.display = 'block';
+}
+
+function disconnectWallet(){
+  window.SBAWallet.disconnect();
+  walletAddr = '';
+  const bar = document.getElementById('wallet-bar');
+  if(bar) bar.classList.remove('show');
+  const display = document.getElementById('wallet-display');
+  if(display) display.textContent = '';
+  const connectArea = document.getElementById('connect-area');
+  if(connectArea) connectArea.style.display = 'block';
+  const mintBtn = document.getElementById('mint-btn');
+  if(mintBtn) mintBtn.style.display = 'none';
+}
+</script>
 </head>
 <body>
 
@@ -1145,48 +1182,7 @@ async function confirmMint(){
     }
   }
 }
-// WALLET CONNECTION - CONFIRMED WORKING
-async function connectWallet(){
-  const btn = document.querySelector('.connect-btn');
-  if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
-  try{
-    const addr = await window.nintondo.connect('bellsMainnet');
-    if(!addr) throw new Error('No address returned');
-    walletAddr = addr;
-    showWalletConnected(addr);
-  }catch(e){
-    if(btn){ btn.textContent='Connect Wallet'; btn.disabled=false; }
-    if(typeof window.nintondo === 'undefined'){
-      alert('Nintondo Wallet not found. Please install from nintondo.io then refresh.');
-    } else {
-      alert('Error: '+(e.message||String(e)));
-    }
-  }
-}
 
-function showWalletConnected(addr){
-  walletAddr = addr;
-  const bar = document.getElementById('wallet-bar');
-  if(bar) bar.classList.add('show');
-  const display = document.getElementById('wallet-display');
-  if(display) display.textContent = addr.slice(0,8)+'...'+addr.slice(-6);
-  const connectArea = document.getElementById('connect-area');
-  if(connectArea) connectArea.style.display = 'none';
-  const mintBtn = document.getElementById('mint-btn');
-  if(mintBtn) mintBtn.style.display = 'block';
-}
 
-function disconnectWallet(){
-  try{ if(window.nintondo && window.nintondo.disconnect) window.nintondo.disconnect(); }catch(e){}
-  walletAddr = '';
-  const bar = document.getElementById('wallet-bar');
-  if(bar) bar.classList.remove('show');
-  const display = document.getElementById('wallet-display');
-  if(display) display.textContent = '';
-  const connectArea = document.getElementById('connect-area');
-  if(connectArea) connectArea.style.display = 'block';
-  const mintBtn = document.getElementById('mint-btn');
-  if(mintBtn) mintBtn.style.display = 'none';
-}
 
 
