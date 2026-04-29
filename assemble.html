@@ -176,6 +176,27 @@ footer p{font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:var(--mu
 }
 </style>
 <script src="wallet.js"></script>
+<script>
+(function() {
+  let realConnect = null;
+  window.connectWallet = function() {
+    console.log('[SBA] connectWallet called - waiting for full load...');
+    if (realConnect) return realConnect.apply(this, arguments);
+    let attempts = 0;
+    const tryRealConnect = function() {
+      attempts++;
+      if (window._realConnectWallet) {
+        realConnect = window._realConnectWallet;
+        return realConnect();
+      }
+      if (attempts < 50) setTimeout(tryRealConnect, 100);
+      else alert('Connection system loading. Please wait and try again.');
+    };
+    tryRealConnect();
+  };
+})();
+</script>
+
 </head>
 <body>
 
@@ -777,7 +798,7 @@ function hideLoad(){ document.getElementById('loading').classList.remove('show')
 
 
 
-async function connectWallet(){
+window._realConnectWallet = async function(){
   const btn = document.getElementById('connect-btn');
   if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
   

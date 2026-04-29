@@ -648,7 +648,28 @@ body.light .stats-row{background:rgba(255,255,255,0.9)}
 </script>
 <script src="wallet.js"></script>
 <script>
-async function connectWallet(){
+(function() {
+  let realConnect = null;
+  window.connectWallet = function() {
+    console.log('[SBA] connectWallet called - waiting for full load...');
+    if (realConnect) return realConnect.apply(this, arguments);
+    let attempts = 0;
+    const tryRealConnect = function() {
+      attempts++;
+      if (window._realConnectWallet) {
+        realConnect = window._realConnectWallet;
+        return realConnect();
+      }
+      if (attempts < 50) setTimeout(tryRealConnect, 100);
+      else alert('Connection system loading. Please wait and try again.');
+    };
+    tryRealConnect();
+  };
+})();
+</script>
+
+<script>
+window._realConnectWallet = async function(){
   const btn = document.querySelector('.connect-btn');
   if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
   
