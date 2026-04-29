@@ -157,46 +157,72 @@
     },
 
     /**
-     * Fetch ALL inscriptions for an address from Nintondo API
+     * Fetch ALL inscriptions for an address - tries multiple endpoints
      */
     async fetchInscriptions(address) {
       console.log('[SBA] Fetching inscriptions for:', address);
 
+      // Try multiple endpoints in order
+      const endpoints = [
+        // Primary: Nintondo CDN (often has CORS)
+        `https://bells-mainnet-content.nintondo.io/api/v1/address/${address}/inscriptions`,
+        // Backup: ord.nintondo.io
+        `https://ord.nintondo.io/api/v1/address/${address}/inscriptions`,
+        // CORS proxy fallback
+        `https://corsproxy.io/?https://ord.nintondo.io/api/v1/address/${address}/inscriptions`,
+        // Alternative CORS proxy
+        `https://api.allorigins.win/raw?url=${encodeURIComponent('https://ord.nintondo.io/api/v1/address/' + address + '/inscriptions')}`,
+      ];
+
       const all = [];
-      let offset = 0;
-      const limit = 100;
-      let hasMore = true;
 
-      while (hasMore && offset < 10000) {
+      for (const baseUrl of endpoints) {
+        console.log('[SBA] Trying endpoint:', baseUrl.slice(0, 60) + '...');
         try {
-          const url = `${ORD_API}/api/v1/address/${address}/inscriptions?offset=${offset}&limit=${limit}`;
-          const res = await fetch(url);
-          if (!res.ok) {
-            console.warn('[SBA] API returned', res.status);
-            break;
+          let offset = 0;
+          const limit = 100;
+          let hasMore = true;
+          let pageCount = 0;
+
+          while (hasMore && pageCount < 100) {
+            const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + `offset=${offset}&limit=${limit}`;
+            const res = await fetch(url, {
+              method: 'GET',
+              mode: 'cors',
+              headers: { 'Accept': 'application/json' }
+            });
+
+            if (!res.ok) {
+              console.warn('[SBA] HTTP', res.status, 'from', baseUrl.slice(0, 50));
+              break;
+            }
+
+            const data = await res.json();
+            const inscriptions = Array.isArray(data) ? data :
+                                 (data.inscriptions || data.result || data.data || []);
+
+            if (!inscriptions || inscriptions.length === 0) {
+              hasMore = false;
+              break;
+            }
+
+            all.push(...inscriptions);
+            console.log(`[SBA] Loaded ${all.length} inscriptions...`);
+
+            if (inscriptions.length < limit) hasMore = false;
+            else offset += limit;
+            pageCount++;
+
+            await new Promise(r => setTimeout(r, 100));
           }
 
-          const data = await res.json();
-          const inscriptions = Array.isArray(data) ? data : (data.inscriptions || data.result || []);
-
-          if (inscriptions.length === 0) {
-            hasMore = false;
-            break;
+          if (all.length > 0) {
+            console.log('[SBA] Successfully fetched', all.length, 'from', baseUrl.slice(0, 50));
+            break; // Got data, stop trying other endpoints
           }
-
-          all.push(...inscriptions);
-          console.log(`[SBA] Loaded ${all.length} inscriptions so far...`);
-
-          if (inscriptions.length < limit) {
-            hasMore = false;
-          } else {
-            offset += limit;
-          }
-
-          await new Promise(r => setTimeout(r, 100));
         } catch (e) {
-          console.error('[SBA] Fetch error:', e);
-          break;
+          console.warn('[SBA] Endpoint failed:', e.message);
+          continue; // Try next endpoint
         }
       }
 
@@ -209,6 +235,7 @@
       console.log('[SBA] Total inscriptions found:', ids.length);
       return ids;
     },
+
 
     /**
      * Quick check if wallet is installed
