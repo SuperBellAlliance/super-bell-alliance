@@ -646,7 +646,8 @@ body.light .stats-row{background:rgba(255,255,255,0.9)}
 
 
 </script>
-<script src="wallet.js">
+<script src="wallet.js"></script>
+<script>
 async function connectWallet(){
   const btn = document.querySelector('.connect-btn');
   if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
