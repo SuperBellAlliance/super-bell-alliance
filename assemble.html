@@ -622,36 +622,7 @@ function getRank(pts){
 
 
 
-async function loadHeroes(addr){
-  showLoad('Fetching your heroes...');
-  try{
-    const res = await fetch(ORD_ADDR + addr, {headers:{'Accept':'application/json'}});
-    if(!res.ok) throw new Error('API error '+res.status);
-    const data = await res.json();
-    const ids = data.inscriptions || (Array.isArray(data)?data.map(i=>i.id||i):[]);
-    processHeroes(ids, addr);
-  }catch(e){
-    // Try paginated API
-    try{
-      showLoad('Trying alternative endpoint...');
-      let all=[],page=0,more=true;
-      while(more){
-        const r = await fetch(`https://ord.nintondo.io/api/v1/address/${addr}/inscriptions?page=${page}&limit=100`);
-        if(!r.ok) throw new Error('API '+r.status);
-        const d = await r.json();
-        if(!d||!d.length){more=false;break;}
-        all=all.concat(d);page++;
-        showLoad(`Fetching heroes... ${all.length} found`);
-        await new Promise(r=>setTimeout(r,200));
-      }
-      processHeroes(all.map(i=>i.id||i.inscription_id||i), addr);
-    }catch(e2){
-      hideLoad();
-      // Show offline message
-      processHeroes([], addr, true);
-    }
-  }
-}
+
 
 function processHeroes(ids, addr, offline=false){
   myHeroes = [];
@@ -804,23 +775,42 @@ function hideLoad(){ document.getElementById('loading').classList.remove('show')
     }).catch(()=>{});
 })();
 
+
+
 async function connectWallet(){
   const btn = document.getElementById('connect-btn');
   if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
+  
   const addr = await window.SBAWallet.connect();
-  if(addr){
-    walletAddr = addr;
-    document.getElementById('connect-screen').style.display='none';
-    document.getElementById('assemble-dash').classList.add('show');
-    const short = addr.slice(0,8)+'...'+addr.slice(-6);
-    const crewAddr = document.getElementById('crew-addr');
-    const crewName = document.getElementById('crew-name');
-    if(crewAddr) crewAddr.textContent = addr;
-    if(crewName) crewName.textContent = short+"'s Crew";
-    showLoad('Loading your heroes...');
-    await loadHeroes(addr);
-  } else {
+  
+  if(!addr){
     if(btn){ btn.textContent='⬡ Connect Nintondo Wallet'; btn.disabled=false; }
+    return;
+  }
+  
+  walletAddr = addr;
+  
+  document.getElementById('connect-screen').style.display='none';
+  document.getElementById('assemble-dash').classList.add('show');
+  
+  const short = addr.slice(0,8)+'...'+addr.slice(-6);
+  const crewAddr = document.getElementById('crew-addr');
+  const crewName = document.getElementById('crew-name');
+  if(crewAddr) crewAddr.textContent = addr;
+  if(crewName) crewName.textContent = short+"'s Crew";
+  
+  showLoad('Loading your heroes...');
+  await loadHeroes(addr);
+}
+
+async function loadHeroes(addr){
+  try {
+    const inscriptionIds = await window.SBAWallet.fetchInscriptions(addr);
+    processHeroes(inscriptionIds, addr);
+  } catch(e) {
+    console.error('Failed to load heroes:', e);
+    hideLoad();
+    processHeroes([], addr, true);
   }
 }
 </script>

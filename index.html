@@ -640,11 +640,21 @@ body.light .stats-row{background:rgba(255,255,255,0.9)}
 }
 </style>
 <script src="wallet.js">
+
+
+
+
+
+</script>
+<script src="wallet.js">
 async function connectWallet(){
   const btn = document.querySelector('.connect-btn');
   if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
+  
   const addr = await window.SBAWallet.connect();
+  
   if(addr){
+    walletAddr = addr;
     showWalletConnected(addr);
   } else {
     if(btn){ btn.textContent='Connect Wallet'; btn.disabled=false; }
