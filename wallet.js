@@ -1,7 +1,6 @@
 /**
  * ============================================================
- * NINTONDO WALLET - Production Ready
- * Uses wallet provider methods directly (no external API needed)
+ * NINTONDO WALLET - Production Ready (v3)
  * ============================================================
  */
 
@@ -32,7 +31,7 @@
 
       if (!nintondo) {
         console.error('[SBA] window.nintondo not found');
-        const choice = confirm('Nintondo Wallet not detected!\n\nClick OK to install.');
+        const choice = confirm('Nintondo Wallet not detected!\nClick OK to install.');
         if (choice) window.open(NINTONDO_INSTALL, '_blank');
         return null;
       }
@@ -49,6 +48,13 @@
         } catch (e) {
           console.log('[SBA] getBalance error:', e.message);
         }
+
+        // Log all available wallet methods for debugging
+        const methods = [];
+        for (const k in nintondo) {
+          if (typeof nintondo[k] === 'function') methods.push(k);
+        }
+        console.log('[SBA] Wallet methods available:', methods);
 
         return address;
       } catch (e) {
@@ -68,9 +74,7 @@
         const sats = await window.nintondo.getBalance();
         this.balance = sats;
         return sats;
-      } catch (e) {
-        return 0;
-      }
+      } catch (e) { return 0; }
     },
 
     getBalanceBEL() {
@@ -101,40 +105,61 @@
     },
 
     /**
-     * Fetch inscriptions - tries wallet provider first, then external APIs
+     * Fetch inscriptions - uses wallet provider's own methods primarily
      */
     async fetchInscriptions(address) {
       console.log('[SBA] Fetching inscriptions for:', address);
 
-      // METHOD 1: Try wallet provider's own getInscriptions
-      if (window.nintondo) {
-        try {
-          console.log('[SBA] Trying wallet.getInscriptions()...');
-          const result = await window.nintondo.getInscriptions();
-          if (result) {
-            const items = Array.isArray(result) ? result : 
-                         (result.list || result.inscriptions || result.data || []);
-            const ids = this._extractIds(items);
-            if (ids.length > 0) {
-              console.log('[SBA] Got', ids.length, 'inscriptions from wallet');
-              this.inscriptions = ids;
-              return ids;
+      if (!window.nintondo) {
+        console.error('[SBA] Wallet not available');
+        return [];
+      }
+
+      // Try every possible wallet method that might return inscriptions
+      const methodsToTry = [
+        'getInscriptions',
+        'getMyInscriptions',
+        'inscriptions',
+        'getOrdinals',
+        'listInscriptions',
+        'getOwnedInscriptions',
+      ];
+
+      for (const methodName of methodsToTry) {
+        if (typeof window.nintondo[methodName] === 'function') {
+          try {
+            console.log('[SBA] Trying window.nintondo.' + methodName + '()...');
+            const result = await window.nintondo[methodName]();
+            console.log('[SBA] Result from ' + methodName + ':', result);
+            
+            if (result) {
+              // Try various response formats
+              let items = null;
+              if (Array.isArray(result)) items = result;
+              else if (result.list && Array.isArray(result.list)) items = result.list;
+              else if (result.inscriptions && Array.isArray(result.inscriptions)) items = result.inscriptions;
+              else if (result.data && Array.isArray(result.data)) items = result.data;
+              else if (result.result && Array.isArray(result.result)) items = result.result;
+              
+              if (items && items.length > 0) {
+                const ids = this._extractIds(items);
+                if (ids.length > 0) {
+                  console.log('[SBA] ✅ Got', ids.length, 'inscriptions via wallet.' + methodName);
+                  this.inscriptions = ids;
+                  return ids;
+                }
+              }
             }
+          } catch (e) {
+            console.log('[SBA] ' + methodName + ' failed:', e.message);
           }
-        } catch (e) {
-          console.log('[SBA] wallet.getInscriptions() not available:', e.message);
         }
       }
 
-      // METHOD 2: Try external APIs with multiple endpoint formats
+      // Try ord.nintondo.io API endpoints
       const apiEndpoints = [
-        // Different endpoint patterns Nintondo uses
         'https://ord.nintondo.io/api/v1/address/' + address + '/inscriptions',
         'https://bells-mainnet-content.nintondo.io/api/v1/address/' + address + '/inscriptions',
-        'https://api.nintondo.io/api/v1/address/' + address + '/inscriptions',
-        // Plain ord paths
-        'https://ord.nintondo.io/address/' + address,
-        // CORS proxies
         'https://corsproxy.io/?https://ord.nintondo.io/api/v1/address/' + address + '/inscriptions',
         'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://ord.nintondo.io/api/v1/address/' + address + '/inscriptions'),
       ];
@@ -142,7 +167,7 @@
       for (const url of apiEndpoints) {
         console.log('[SBA] Trying:', url.slice(0, 70));
         try {
-          const res = await fetch(url, {
+          const res = await fetch(url, { 
             method: 'GET',
             headers: { 'Accept': 'application/json' }
           });
@@ -151,12 +176,11 @@
             continue;
           }
           const data = await res.json();
-          const items = Array.isArray(data) ? data : 
-                       (data.inscriptions || data.list || data.result || data.data || []);
+          const items = Array.isArray(data) ? data : (data.list || data.inscriptions || data.data || data.result || []);
           if (items && items.length > 0) {
             const ids = this._extractIds(items);
             if (ids.length > 0) {
-              console.log('[SBA] Got', ids.length, 'from external API');
+              console.log('[SBA] ✅ Got', ids.length, 'from external API');
               this.inscriptions = ids;
               return ids;
             }
@@ -166,7 +190,7 @@
         }
       }
 
-      console.warn('[SBA] All inscription endpoints failed');
+      console.warn('[SBA] All inscription endpoints failed - returning empty list');
       return [];
     },
 
@@ -190,7 +214,7 @@
   };
 
   if (typeof window.nintondo !== 'undefined') {
-    console.log('[SBA] Nintondo wallet detected immediately');
+    console.log('[SBA] Nintondo wallet detected');
   } else {
     console.log('[SBA] Waiting for Nintondo wallet to inject...');
     setTimeout(function() {

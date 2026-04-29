@@ -675,11 +675,26 @@ window._realConnectWallet = async function(){
   
   const addr = await window.SBAWallet.connect();
   
-  if(addr){
-    walletAddr = addr;
-    showWalletConnected(addr);
-  } else {
+  if(!addr){
     if(btn){ btn.textContent='Connect Wallet'; btn.disabled=false; }
+    return;
+  }
+  
+  window.walletAddr = addr;
+  
+  if(typeof window.showWalletConnected === 'function'){
+    window.showWalletConnected(addr);
+  } else {
+    let retries = 0;
+    const tryShow = function(){
+      retries++;
+      if(typeof window.showWalletConnected === 'function'){
+        window.showWalletConnected(addr);
+      } else if(retries < 50){
+        setTimeout(tryShow, 100);
+      }
+    };
+    setTimeout(tryShow, 100);
   }
 }
 
@@ -707,6 +722,11 @@ function disconnectWallet(){
   const mintBtn = document.getElementById('mint-btn');
   if(mintBtn) mintBtn.style.display = 'none';
 }
+
+window.showWalletConnected = typeof showWalletConnected !== 'undefined' ? showWalletConnected : function(){};
+window.disconnectWallet = typeof disconnectWallet !== 'undefined' ? disconnectWallet : function(){};
+console.log('[SBA] Window globals exposed');
+
 </script>
 </head>
 <body>

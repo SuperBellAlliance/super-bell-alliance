@@ -809,7 +809,7 @@ window._realConnectWallet = async function(){
     return;
   }
   
-  walletAddr = addr;
+  window.walletAddr = addr;
   
   document.getElementById('connect-screen').style.display='none';
   document.getElementById('assemble-dash').classList.add('show');
@@ -820,8 +820,23 @@ window._realConnectWallet = async function(){
   if(crewAddr) crewAddr.textContent = addr;
   if(crewName) crewName.textContent = short+"'s Crew";
   
-  showLoad('Loading your heroes...');
-  await loadHeroes(addr);
+  // Wait for loadHeroes function
+  if(typeof window.loadHeroes === 'function'){
+    window.loadHeroes(addr);
+  } else {
+    let retries = 0;
+    const tryLoad = function(){
+      retries++;
+      if(typeof window.loadHeroes === 'function'){
+        window.loadHeroes(addr);
+      } else if(retries < 50){
+        setTimeout(tryLoad, 100);
+      } else {
+        console.error('loadHeroes function not available');
+      }
+    };
+    setTimeout(tryLoad, 100);
+  }
 }
 
 async function loadHeroes(addr){
@@ -834,6 +849,15 @@ async function loadHeroes(addr){
     processHeroes([], addr, true);
   }
 }
+
+window.loadHeroes = loadHeroes;
+window.showLoad = showLoad;
+window.hideLoad = hideLoad;
+window.processHeroes = typeof processHeroes !== 'undefined' ? processHeroes : function(){};
+window.disconnect = typeof disconnect !== 'undefined' ? disconnect : function(){};
+window.toggleTheme = typeof toggleTheme !== 'undefined' ? toggleTheme : function(){};
+console.log('[SBA] Window globals exposed');
+
 </script>
 </body>
 </html>
