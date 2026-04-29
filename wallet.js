@@ -1,66 +1,175 @@
 /**
  * ============================================================
- * NINTONDO WALLET - Production Ready (v3)
+ * NINTONDO WALLET — Super Bell Alliance (v4)
+ * Updated to match official Nintondo SDK provider docs:
+ * https://docs.nintondo.io/docs/to-developers/nintondo-wallet/nintondo-sdk/provider
+ * ============================================================
+ *
+ * KEY CORRECTIONS vs v3
+ * ─────────────────────
+ * 1. API surface: The extension injects `window.nintondo`, which is
+ *    the provider object itself. All methods live directly on it —
+ *    NOT on `window.nintondo.provider`. Call nintondo.connect(),
+ *    nintondo.getBalance(), etc. directly.
+ *
+ * 2. connect() signature: docs show `nintondo.connect(networkType?)`
+ *    with default "bellsMainnet". v3 already passed this correctly.
+ *
+ * 3. getBalance() returns a raw number (satoshis). v3 handled this OK.
+ *
+ * 4. getAccount() / isConnected() — official methods for checking
+ *    session state without re-prompting the user. Use these on page
+ *    load to auto-restore a session.
+ *
+ * 5. Inscriptions: The Nintondo wallet does NOT expose a
+ *    getInscriptions() method in the documented public API. You must
+ *    query the ord.nintondo.io REST API. The v3 "try every method
+ *    name" loop was speculative and messy; this version goes straight
+ *    to the API with a clean fallback chain.
+ *
+ * 6. Event API: `nintondo.on('accountsChanged', cb)` and
+ *    `nintondo.on('disconnected', cb)` are the two documented events.
+ *    Use removeListener() / removeAllListeners() to clean up.
+ *
+ * 7. createTx payload typo: docs spell it `receiverToPayFee` (NOT
+ *    `recaiverToPayFee`). v3 already had the correct spelling.
  * ============================================================
  */
 
-(function() {
+(function () {
   'use strict';
 
-  const NINTONDO_INSTALL = 'https://chromewebstore.google.com/detail/nintondo-wallet/akkmagafhjjjjclaejjomkeccmjhdkpa';
+  /* ── Constants ─────────────────────────────────────────── */
 
+  const NINTONDO_INSTALL =
+    'https://chromewebstore.google.com/detail/nintondo-wallet/akkmagafhjjjjclaejjomkeccmjhdkpa';
+
+  /**
+   * Ordered list of REST endpoints used to fetch inscriptions.
+   * Each is a function so the address is interpolated lazily.
+   * We try them in order and return the first successful result.
+   */
+  const INSCRIPTION_ENDPOINTS = [
+    (addr) =>
+      `https://ord.nintondo.io/api/v1/address/${addr}/inscriptions`,
+    (addr) =>
+      `https://bells-mainnet-content.nintondo.io/api/v1/address/${addr}/inscriptions`,
+    // CORS proxies as last-resort fallbacks
+    (addr) =>
+      `https://corsproxy.io/?${encodeURIComponent(
+        `https://ord.nintondo.io/api/v1/address/${addr}/inscriptions`
+      )}`,
+    (addr) =>
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(
+        `https://ord.nintondo.io/api/v1/address/${addr}/inscriptions`
+      )}`,
+  ];
+
+  /* ── Utilities ─────────────────────────────────────────── */
+
+  /**
+   * Poll for `window.nintondo` up to `timeoutMs` milliseconds.
+   * The extension injects the object asynchronously after page load.
+   */
   async function waitForWallet(timeoutMs) {
     timeoutMs = timeoutMs || 3000;
     if (window.nintondo) return window.nintondo;
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       if (window.nintondo) return window.nintondo;
-      await new Promise(function(r) { setTimeout(r, 100); });
+      await new Promise(function (r) { setTimeout(r, 100); });
     }
     return null;
   }
+
+  /**
+   * Extract a flat array of inscription ID strings from whatever
+   * shape the API returns.
+   */
+  function extractIds(items) {
+    if (!Array.isArray(items)) return [];
+    return items
+      .map(function (item) {
+        if (typeof item === 'string') return item;
+        return (
+          item.id ||
+          item.inscription_id ||
+          item.inscriptionId ||
+          item.inscription ||
+          item.txid ||
+          null
+        );
+      })
+      .filter(Boolean);
+  }
+
+  /**
+   * Normalise varying API response shapes into a plain array.
+   */
+  function normaliseResponse(data) {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.list)) return data.list;
+    if (data && Array.isArray(data.inscriptions)) return data.inscriptions;
+    if (data && Array.isArray(data.data)) return data.data;
+    if (data && Array.isArray(data.result)) return data.result;
+    return [];
+  }
+
+  /* ── SBAWallet public object ───────────────────────────── */
 
   window.SBAWallet = {
     addr: null,
     balance: 0,
     inscriptions: [],
 
+    /* ── connect ──────────────────────────────────────────
+     * Prompts the user to approve the connection.
+     * Returns the connected address string, or null on failure.
+     */
     async connect() {
-      console.log('[SBA] Attempting wallet connection...');
+      console.log('[SBA] Attempting wallet connection…');
       const nintondo = await waitForWallet();
 
       if (!nintondo) {
-        console.error('[SBA] window.nintondo not found');
-        const choice = confirm('Nintondo Wallet not detected!\nClick OK to install.');
-        if (choice) window.open(NINTONDO_INSTALL, '_blank');
+        console.error('[SBA] window.nintondo not found after 3 s');
+        const install = confirm(
+          'Nintondo Wallet not detected!\nClick OK to open the Chrome Web Store.'
+        );
+        if (install) window.open(NINTONDO_INSTALL, '_blank');
         return null;
       }
 
       try {
+        // connect() returns the address string on success.
+        // The network parameter defaults to "bellsMainnet".
         const address = await nintondo.connect('bellsMainnet');
-        if (!address) throw new Error('No address returned');
+        if (!address) throw new Error('No address returned from nintondo.connect()');
+
         console.log('[SBA] Connected:', address);
         this.addr = address;
 
+        // Fetch balance immediately after connecting
         try {
           this.balance = await nintondo.getBalance();
           console.log('[SBA] Balance:', this.balance, 'satoshis');
         } catch (e) {
-          console.log('[SBA] getBalance error:', e.message);
+          console.warn('[SBA] getBalance() failed:', e.message);
         }
 
-        // Log all available wallet methods for debugging
-        const methods = [];
-        for (const k in nintondo) {
-          if (typeof nintondo[k] === 'function') methods.push(k);
-        }
+        // Log available methods for debugging during development
+        const methods = Object.keys(nintondo).filter(
+          (k) => typeof nintondo[k] === 'function'
+        );
         console.log('[SBA] Wallet methods available:', methods);
 
         return address;
       } catch (e) {
         console.error('[SBA] Connection error:', e);
-        if (e.code === 4001 || (e.message && e.message.toLowerCase().includes('reject'))) {
-          alert('Connection rejected. Please approve in your Nintondo wallet.');
+        if (
+          e.code === 4001 ||
+          (e.message && e.message.toLowerCase().includes('reject'))
+        ) {
+          alert('Connection rejected — please approve in your Nintondo wallet.');
         } else {
           alert('Wallet error: ' + (e.message || String(e)));
         }
@@ -68,159 +177,194 @@
       }
     },
 
+    /* ── restoreSession ───────────────────────────────────
+     * Silently checks whether a session is already active
+     * (user previously approved and hasn't disconnected).
+     * Useful on page load — does NOT show a connect prompt.
+     * Returns the address string if a session exists, or null.
+     */
+    async restoreSession() {
+      const nintondo = await waitForWallet(1500);
+      if (!nintondo) return null;
+
+      try {
+        // isConnected() is documented and never triggers a prompt.
+        const connected = await nintondo.isConnected();
+        if (!connected) return null;
+
+        // getAccount() returns the current address without prompting.
+        const address = await nintondo.getAccount();
+        if (!address) return null;
+
+        console.log('[SBA] Session restored:', address);
+        this.addr = address;
+
+        try {
+          this.balance = await nintondo.getBalance();
+        } catch (e) {
+          console.warn('[SBA] getBalance() failed on restore:', e.message);
+        }
+
+        return address;
+      } catch (e) {
+        // Not an error — simply no active session
+        console.log('[SBA] No active session:', e.message);
+        return null;
+      }
+    },
+
+    /* ── getBalance ───────────────────────────────────────
+     * Returns current balance in satoshis (updates this.balance).
+     */
     async getBalance() {
       if (!window.nintondo) return 0;
       try {
         const sats = await window.nintondo.getBalance();
         this.balance = sats;
         return sats;
-      } catch (e) { return 0; }
+      } catch (e) {
+        console.warn('[SBA] getBalance() error:', e.message);
+        return 0;
+      }
     },
 
+    /* ── getBalanceBEL ────────────────────────────────────
+     * Convenience: returns balance as a human-readable BEL string.
+     */
     getBalanceBEL() {
       return (this.balance / 100000000).toFixed(8);
     },
 
+    /* ── sendPayment ──────────────────────────────────────
+     * Creates and signs a BEL transfer transaction.
+     * Returns the signed transaction hex string.
+     *
+     * NOTE: `createTx` returns a *signed hex* string, not a txid.
+     * You must still broadcast it (e.g. via the Nintondo API or a
+     * Bellscoin node) if you need on-chain confirmation tracking.
+     */
     async sendPayment(toAddress, belAmount) {
       if (!window.nintondo) throw new Error('Wallet not connected');
       const satoshis = Math.round(belAmount * 100000000);
-      console.log('[SBA] Sending', belAmount, 'BEL to', toAddress);
+      console.log('[SBA] Sending', belAmount, 'BEL (', satoshis, 'sats) to', toAddress);
+
+      // Field spellings taken verbatim from the official docs:
+      // to, amount, receiverToPayFee, feeRate
       return await window.nintondo.createTx({
         to: toAddress,
         amount: satoshis,
-        receiverToPayFee: false,
-        feeRate: 10
+        receiverToPayFee: false,  // buyer pays fee on top
+        feeRate: 10,              // sat/vByte
       });
     },
 
+    /* ── disconnect ───────────────────────────────────────
+     * Disconnects the wallet and clears local state.
+     */
     async disconnect() {
       try {
         if (window.nintondo && window.nintondo.disconnect) {
           await window.nintondo.disconnect();
         }
-      } catch (e) {}
+      } catch (e) {
+        // Ignore — extension may already be in a disconnected state
+      }
       this.addr = null;
       this.balance = 0;
       this.inscriptions = [];
     },
 
-    /**
-     * Fetch inscriptions - uses wallet provider's own methods primarily
+    /* ── fetchInscriptions ────────────────────────────────
+     * Retrieves the list of inscription IDs held by `address`
+     * from the ord.nintondo.io REST API.
+     *
+     * The Nintondo wallet provider does NOT expose a documented
+     * getInscriptions() method in its public SDK — inscription
+     * data must be fetched from the indexer API instead.
+     *
+     * Returns an array of inscription ID strings (may be empty).
      */
     async fetchInscriptions(address) {
-      console.log('[SBA] Fetching inscriptions for:', address);
-
-      if (!window.nintondo) {
-        console.error('[SBA] Wallet not available');
+      if (!address) {
+        console.warn('[SBA] fetchInscriptions: no address supplied');
         return [];
       }
+      console.log('[SBA] Fetching inscriptions for:', address);
 
-      // Try every possible wallet method that might return inscriptions
-      const methodsToTry = [
-        'getInscriptions',
-        'getMyInscriptions',
-        'inscriptions',
-        'getOrdinals',
-        'listInscriptions',
-        'getOwnedInscriptions',
-      ];
-
-      for (const methodName of methodsToTry) {
-        if (typeof window.nintondo[methodName] === 'function') {
-          try {
-            console.log('[SBA] Trying window.nintondo.' + methodName + '()...');
-            const result = await window.nintondo[methodName]();
-            console.log('[SBA] Result from ' + methodName + ':', result);
-            
-            if (result) {
-              // Try various response formats
-              let items = null;
-              if (Array.isArray(result)) items = result;
-              else if (result.list && Array.isArray(result.list)) items = result.list;
-              else if (result.inscriptions && Array.isArray(result.inscriptions)) items = result.inscriptions;
-              else if (result.data && Array.isArray(result.data)) items = result.data;
-              else if (result.result && Array.isArray(result.result)) items = result.result;
-              
-              if (items && items.length > 0) {
-                const ids = this._extractIds(items);
-                if (ids.length > 0) {
-                  console.log('[SBA] ✅ Got', ids.length, 'inscriptions via wallet.' + methodName);
-                  this.inscriptions = ids;
-                  return ids;
-                }
-              }
-            }
-          } catch (e) {
-            console.log('[SBA] ' + methodName + ' failed:', e.message);
-          }
-        }
-      }
-
-      // Try ord.nintondo.io API endpoints
-      const apiEndpoints = [
-        'https://ord.nintondo.io/api/v1/address/' + address + '/inscriptions',
-        'https://bells-mainnet-content.nintondo.io/api/v1/address/' + address + '/inscriptions',
-        'https://corsproxy.io/?https://ord.nintondo.io/api/v1/address/' + address + '/inscriptions',
-        'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://ord.nintondo.io/api/v1/address/' + address + '/inscriptions'),
-      ];
-
-      for (const url of apiEndpoints) {
-        console.log('[SBA] Trying:', url.slice(0, 70));
+      for (const buildUrl of INSCRIPTION_ENDPOINTS) {
+        const url = buildUrl(address);
+        console.log('[SBA] Trying:', url.slice(0, 80) + (url.length > 80 ? '…' : ''));
         try {
-          const res = await fetch(url, { 
-            method: 'GET',
-            headers: { 'Accept': 'application/json' }
-          });
+          const res = await fetch(url, { headers: { Accept: 'application/json' } });
           if (!res.ok) {
-            console.log('[SBA] HTTP', res.status);
+            console.log('[SBA] HTTP', res.status, '—', url.slice(0, 60));
             continue;
           }
           const data = await res.json();
-          const items = Array.isArray(data) ? data : (data.list || data.inscriptions || data.data || data.result || []);
-          if (items && items.length > 0) {
-            const ids = this._extractIds(items);
+          const items = normaliseResponse(data);
+          if (items.length > 0) {
+            const ids = extractIds(items);
             if (ids.length > 0) {
-              console.log('[SBA] ✅ Got', ids.length, 'from external API');
+              console.log('[SBA] ✅ Got', ids.length, 'inscription(s)');
               this.inscriptions = ids;
               return ids;
             }
           }
         } catch (e) {
-          console.log('[SBA] Failed:', e.message);
+          console.warn('[SBA] Endpoint failed:', e.message);
         }
       }
 
-      console.warn('[SBA] All inscription endpoints failed - returning empty list');
+      console.warn('[SBA] All inscription endpoints failed — returning []');
       return [];
     },
 
-    _extractIds(items) {
-      return items.map(function(item) {
-        if (typeof item === 'string') return item;
-        return item.id || item.inscription_id || item.inscriptionId || 
-               item.inscription || item.txid || null;
-      }).filter(Boolean);
-    },
-
+    /* ── isInstalled ──────────────────────────────────────
+     * Quick synchronous check for the extension object.
+     */
     isInstalled() {
       return typeof window.nintondo !== 'undefined';
     },
 
+    /* ── onAccountChange ──────────────────────────────────
+     * Subscribes to wallet account-switch events.
+     * The official event name is 'accountsChanged'.
+     */
     onAccountChange(callback) {
-      if (window.nintondo && window.nintondo.on) {
+      if (window.nintondo && typeof window.nintondo.on === 'function') {
         window.nintondo.on('accountsChanged', callback);
       }
-    }
+    },
+
+    /* ── onDisconnect ─────────────────────────────────────
+     * Subscribes to the 'disconnected' event (network change or
+     * user-initiated disconnect from the extension popup).
+     */
+    onDisconnect(callback) {
+      if (window.nintondo && typeof window.nintondo.on === 'function') {
+        window.nintondo.on('disconnected', callback);
+      }
+    },
+
+    /* ── removeAccountChangeListener ─────────────────────*/
+    removeAccountChangeListener(callback) {
+      if (window.nintondo && typeof window.nintondo.removeListener === 'function') {
+        window.nintondo.removeListener('accountsChanged', callback);
+      }
+    },
   };
 
+  /* ── Startup logging ────────────────────────────────────── */
   if (typeof window.nintondo !== 'undefined') {
-    console.log('[SBA] Nintondo wallet detected');
+    console.log('[SBA] Nintondo wallet already injected ✅');
   } else {
-    console.log('[SBA] Waiting for Nintondo wallet to inject...');
-    setTimeout(function() {
+    console.log('[SBA] Nintondo wallet not yet injected — will poll on connect()');
+    // Soft check after 1.5 s (covers most slow extension starts)
+    setTimeout(function () {
       if (typeof window.nintondo !== 'undefined') {
-        console.log('[SBA] Nintondo wallet now available');
+        console.log('[SBA] Nintondo wallet now available ✅');
       }
     }, 1500);
   }
+
 })();
