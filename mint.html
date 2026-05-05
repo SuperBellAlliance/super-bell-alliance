@@ -399,20 +399,8 @@ emailjs.init(EMAILJS_PUBLIC_KEY);
 })();
 
 // ═══════════════════════════════════════════
-// WALLET
+// WALLET — uses wallet.js (same as index.html)
 // ═══════════════════════════════════════════
-window._realConnectWallet = async function(){
-  const btn = document.querySelector('.connect-btn');
-  if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
-  const addr = await window.SBAWallet.connect();
-  if(!addr){
-    if(btn){ btn.textContent='⬡ Connect Nintondo Wallet'; btn.disabled=false; }
-    return;
-  }
-  walletAddr = addr;
-  showWalletConnected(addr);
-};
-
 function showWalletConnected(addr){
   walletAddr = addr;
   document.getElementById('wallet-bar').classList.add('show');
@@ -422,7 +410,7 @@ function showWalletConnected(addr){
 }
 
 function disconnectWallet(){
-  window.SBAWallet.disconnect();
+  if(window.SBAWallet) window.SBAWallet.disconnect();
   walletAddr = '';
   document.getElementById('wallet-bar').classList.remove('show');
   document.getElementById('connect-area').style.display = 'block';
@@ -430,7 +418,27 @@ function disconnectWallet(){
   document.getElementById('draw-section').classList.remove('show');
 }
 
-// Placeholder connect shim
+window.showWalletConnected = showWalletConnected;
+window.disconnectWallet = disconnectWallet;
+
+// Connect button handler
+window._realConnectWallet = async function(){
+  const btn = document.querySelector('.connect-btn');
+  if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
+  try{
+    const addr = await window.SBAWallet.connect();
+    if(!addr){
+      if(btn){ btn.textContent='⬡ Connect Nintondo Wallet'; btn.disabled=false; }
+      return;
+    }
+    walletAddr = addr;
+    showWalletConnected(addr);
+  } catch(e){
+    console.error('Wallet connect error:', e);
+    if(btn){ btn.textContent='⬡ Connect Nintondo Wallet'; btn.disabled=false; }
+  }
+};
+
 (function(){
   let realConnect = null;
   window.connectWallet = function(){
