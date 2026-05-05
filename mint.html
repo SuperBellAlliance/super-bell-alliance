@@ -420,28 +420,8 @@ emailjs.init(EMAILJS_PUBLIC_KEY);
 })();
 
 // ═══════════════════════════════════════════
-// WALLET — exact pattern from assemble.html
+// WALLET — mirrors assemble.html exactly
 // ═══════════════════════════════════════════
-function showWalletConnected(addr){
-  walletAddr = addr;
-  document.getElementById('wallet-bar').classList.add('show');
-  document.getElementById('wallet-display').textContent = addr.slice(0,8)+'...'+addr.slice(-6);
-  document.getElementById('connect-area').style.display = 'none';
-  document.getElementById('qty-section').classList.add('show');
-}
-
-function disconnectWallet(){
-  try{ if(window.nintondo) window.nintondo.disconnect(); } catch(e){}
-  walletAddr = '';
-  document.getElementById('wallet-bar').classList.remove('show');
-  document.getElementById('connect-area').style.display = 'block';
-  document.getElementById('qty-section').classList.remove('show');
-  document.getElementById('draw-section').classList.remove('show');
-}
-
-window.showWalletConnected = showWalletConnected;
-window.disconnectWallet = disconnectWallet;
-
 window._realConnectWallet = async function(){
   const btn = document.getElementById('connect-btn');
   if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
@@ -455,8 +435,32 @@ window._realConnectWallet = async function(){
   
   window.walletAddr = addr;
   walletAddr = addr;
-  showWalletConnected(addr);
+
+  // Show wallet bar
+  const bar = document.getElementById('wallet-bar');
+  if(bar) bar.classList.add('show');
+  const display = document.getElementById('wallet-display');
+  if(display) display.textContent = addr.slice(0,8)+'...'+addr.slice(-6);
+
+  // Hide connect area, show qty section
+  const connectArea = document.getElementById('connect-area');
+  if(connectArea) connectArea.style.display = 'none';
+  const qtySection = document.getElementById('qty-section');
+  if(qtySection) qtySection.classList.add('show');
 };
+
+function disconnectWallet(){
+  try{ if(window.nintondo && window.nintondo.disconnect) window.nintondo.disconnect(); } catch(e){}
+  walletAddr = '';
+  const bar = document.getElementById('wallet-bar');
+  if(bar) bar.classList.remove('show');
+  const connectArea = document.getElementById('connect-area');
+  if(connectArea) connectArea.style.display = 'block';
+  const qtySection = document.getElementById('qty-section');
+  if(qtySection) qtySection.classList.remove('show');
+  const drawSection = document.getElementById('draw-section');
+  if(drawSection) drawSection.classList.remove('show');
+}
 
 // ═══════════════════════════════════════════
 // QUANTITY
