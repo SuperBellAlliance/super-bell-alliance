@@ -820,22 +820,21 @@ window._realConnectWallet = async function(){
   if(crewAddr) crewAddr.textContent = addr;
   if(crewName) crewName.textContent = short+"'s Crew";
   
-  // Wait for loadHeroes function
-  if(typeof window.loadHeroes === 'function'){
-    window.loadHeroes(addr);
-  } else {
-    let retries = 0;
-    const tryLoad = function(){
-      retries++;
-      if(typeof window.loadHeroes === 'function'){
-        window.loadHeroes(addr);
-      } else if(retries < 50){
-        setTimeout(tryLoad, 100);
-      } else {
-        console.error('loadHeroes function not available');
-      }
-    };
-    setTimeout(tryLoad, 100);
+  // Show maintenance message in crew section
+  const grid = document.getElementById('crew-grid');
+  if(grid){
+    grid.innerHTML = `
+      <div style="grid-column:1/-1;padding:3rem 2rem;text-align:center;background:rgba(255,107,26,0.04);border:1px solid rgba(255,107,26,0.2)">
+        <div style="font-size:2rem;margin-bottom:1rem">⚙️</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:0.08em;color:var(--orange);margin-bottom:0.5rem">
+          CREW DISPLAY — API MAINTENANCE
+        </div>
+        <div style="font-size:0.88rem;color:#B0B0C8;line-height:1.7;max-width:560px;margin:0 auto">
+          The Nintondo blockchain API is currently undergoing maintenance.
+          Your crew badges and rank will be calculated once the service is back online.
+        </div>
+      </div>
+    `;
   }
 }
 
