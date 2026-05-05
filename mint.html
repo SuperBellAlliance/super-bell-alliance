@@ -207,6 +207,27 @@ main{position:relative;z-index:1;padding-top:80px;min-height:100vh;}
   .card-front-img{height:150px;}
 }
 </style>
+<script src="wallet.js"></script>
+<script>
+(function() {
+  let realConnect = null;
+  window.connectWallet = function() {
+    console.log('[SBA] connectWallet called - waiting for full load...');
+    if (realConnect) return realConnect.apply(this, arguments);
+    let attempts = 0;
+    const tryRealConnect = function() {
+      attempts++;
+      if (window._realConnectWallet) {
+        realConnect = window._realConnectWallet;
+        return realConnect();
+      }
+      if (attempts < 50) setTimeout(tryRealConnect, 100);
+      else alert('Connection system loading. Please wait and try again.');
+    };
+    tryRealConnect();
+  };
+})();
+</script>
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -330,7 +351,7 @@ main{position:relative;z-index:1;padding-top:80px;min-height:100vh;}
   </div>
 </div>
 
-<script src="wallet.js"></script>
+
 <script>
 // ═══════════════════════════════════════════
 // CONFIG — Update these with your credentials
