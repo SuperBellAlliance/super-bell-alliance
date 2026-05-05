@@ -260,7 +260,7 @@ main{position:relative;z-index:1;padding-top:80px;min-height:100vh;}
 
         <!-- CONNECT -->
         <div id="connect-area" class="connect-area">
-          <button class="connect-btn" onclick="connectWallet()">⬡ Connect Nintondo Wallet</button>
+          <button class="connect-btn" id="connect-btn" onclick="connectWallet()">⬡ Connect Nintondo Wallet</button>
           <p class="connect-hint">Nintondo wallet required · Bellscoin mainnet</p>
         </div>
 
@@ -399,7 +399,7 @@ emailjs.init(EMAILJS_PUBLIC_KEY);
 })();
 
 // ═══════════════════════════════════════════
-// WALLET — uses wallet.js (same as index.html)
+// WALLET — exact pattern from assemble.html
 // ═══════════════════════════════════════════
 function showWalletConnected(addr){
   walletAddr = addr;
@@ -410,7 +410,7 @@ function showWalletConnected(addr){
 }
 
 function disconnectWallet(){
-  if(window.SBAWallet) window.SBAWallet.disconnect();
+  try{ if(window.nintondo) window.nintondo.disconnect(); } catch(e){}
   walletAddr = '';
   document.getElementById('wallet-bar').classList.remove('show');
   document.getElementById('connect-area').style.display = 'block';
@@ -421,38 +421,21 @@ function disconnectWallet(){
 window.showWalletConnected = showWalletConnected;
 window.disconnectWallet = disconnectWallet;
 
-// Connect button handler
 window._realConnectWallet = async function(){
-  const btn = document.querySelector('.connect-btn');
+  const btn = document.getElementById('connect-btn');
   if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
-  try{
-    const addr = await window.SBAWallet.connect();
-    if(!addr){
-      if(btn){ btn.textContent='⬡ Connect Nintondo Wallet'; btn.disabled=false; }
-      return;
-    }
-    walletAddr = addr;
-    showWalletConnected(addr);
-  } catch(e){
-    console.error('Wallet connect error:', e);
+  
+  const addr = await window.SBAWallet.connect();
+  
+  if(!addr){
     if(btn){ btn.textContent='⬡ Connect Nintondo Wallet'; btn.disabled=false; }
+    return;
   }
+  
+  window.walletAddr = addr;
+  walletAddr = addr;
+  showWalletConnected(addr);
 };
-
-(function(){
-  let realConnect = null;
-  window.connectWallet = function(){
-    if(realConnect) return realConnect();
-    let attempts = 0;
-    const try_ = function(){
-      attempts++;
-      if(window._realConnectWallet){ realConnect = window._realConnectWallet; return realConnect(); }
-      if(attempts < 50) setTimeout(try_, 100);
-      else alert('Connection system loading. Please wait.');
-    };
-    try_();
-  };
-})();
 
 // ═══════════════════════════════════════════
 // QUANTITY
