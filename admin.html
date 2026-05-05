@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>SBA Admin Panel</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Inter:wght@300;400;500&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --orange:#FF6B1A;--gold:#C9A84C;--gold2:#F0C96B;
+  --red:#E8192C;--bg:#07070A;--bg2:#0D0D14;--bg3:#121219;
+  --panel:#0F0F18;--border:#1A1A28;--text:#F0F0F8;--muted:#B0B0C8;--green:#00FF9D;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+
+/* LOGIN */
+.login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;}
+.login-card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:2.5rem;width:100%;max-width:400px;position:relative;}
+.login-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--orange),var(--gold));border-radius:16px 16px 0 0;}
+.login-title{font-family:'Orbitron',monospace;font-size:1.2rem;font-weight:700;margin-bottom:.5rem;}
+.login-sub{color:var(--muted);font-size:.8rem;margin-bottom:2rem;}
+.login-input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;color:var(--text);font-size:.9rem;outline:none;margin-bottom:1rem;transition:border-color .2s;}
+.login-input:focus{border-color:var(--orange);}
+.login-btn{width:100%;padding:.9rem;background:linear-gradient(135deg,var(--orange),var(--gold));border:none;border-radius:8px;color:#000;font-family:'Orbitron',monospace;font-size:.85rem;font-weight:700;cursor:pointer;transition:all .3s;}
+.login-btn:hover{opacity:.9;}
+.login-err{color:var(--red);font-size:.8rem;margin-top:.75rem;display:none;}
+
+/* DASHBOARD */
+.dashboard{display:none;padding:1.5rem;}
+.dash-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;flex-wrap:gap;}
+.dash-title{font-family:'Orbitron',monospace;font-size:1.3rem;font-weight:700;}
+.dash-title span{color:var(--orange);}
+.logout-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:.4rem .9rem;border-radius:6px;font-size:.75rem;cursor:pointer;transition:all .2s;}
+.logout-btn:hover{border-color:var(--red);color:var(--red);}
+
+/* STATS ROW */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin-bottom:2rem;}
+.stat-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:1.25rem;text-align:center;}
+.stat-val{font-family:'Orbitron',monospace;font-size:1.6rem;font-weight:700;color:var(--gold);}
+.stat-val.green{color:var(--green);}
+.stat-val.red{color:var(--red);}
+.stat-val.orange{color:var(--orange);}
+.stat-lbl{font-size:.7rem;color:var(--muted);letter-spacing:.1em;margin-top:.25rem;}
+
+/* TABS */
+.tabs{display:flex;gap:.5rem;margin-bottom:1.5rem;border-bottom:1px solid var(--border);padding-bottom:.75rem;}
+.tab{padding:.5rem 1.25rem;background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:.8rem;cursor:pointer;transition:all .2s;font-family:'Orbitron',monospace;}
+.tab.active{background:rgba(255,107,26,.1);border-color:var(--orange);color:var(--orange);}
+
+/* ORDERS TABLE */
+.orders-list{display:flex;flex-direction:column;gap:1rem;}
+.order-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.order-card.pending{border-left:3px solid var(--orange);}
+.order-card.sent{border-left:3px solid var(--green);}
+.order-header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;cursor:pointer;gap:1rem;flex-wrap:wrap;}
+.order-id{font-family:'Share Tech Mono',monospace;font-size:.75rem;color:var(--muted);}
+.order-status{font-size:.7rem;padding:.25rem .6rem;border-radius:4px;font-family:'Orbitron',monospace;font-weight:700;}
+.status-pending{background:rgba(255,107,26,.15);color:var(--orange);border:1px solid rgba(255,107,26,.3);}
+.status-sent{background:rgba(0,255,157,.1);color:var(--green);border:1px solid rgba(0,255,157,.3);}
+.order-summary{font-size:.85rem;color:var(--text);}
+.order-time{font-family:'Share Tech Mono',monospace;font-size:.7rem;color:var(--muted);}
+.order-body{padding:0 1.25rem 1.25rem;display:none;}
+.order-body.open{display:block;}
+.order-detail-row{display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid var(--border);font-size:.8rem;}
+.order-detail-row:last-child{border:none;}
+.detail-lbl{color:var(--muted);}
+.detail-val{font-family:'Share Tech Mono',monospace;color:var(--text);word-break:break-all;max-width:60%;text-align:right;}
+.heroes-list{margin:.75rem 0;}
+.hero-item{display:flex;align-items:center;justify-content:space-between;padding:.4rem .6rem;background:var(--bg2);border-radius:6px;margin-bottom:.4rem;font-size:.8rem;}
+.hero-name{color:var(--gold);font-family:'Orbitron',monospace;font-size:.75rem;}
+.hero-rank{color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.7rem;}
+.mark-sent-btn{width:100%;padding:.7rem;background:linear-gradient(135deg,var(--green),#00cc7d);border:none;border-radius:7px;color:#000;font-family:'Orbitron',monospace;font-size:.8rem;font-weight:700;cursor:pointer;transition:all .2s;margin-top:.75rem;}
+.mark-sent-btn:hover{opacity:.85;}
+.mark-sent-btn:disabled{opacity:.5;cursor:not-allowed;}
+.already-sent{text-align:center;color:var(--green);font-size:.8rem;padding:.5rem;font-family:'Share Tech Mono',monospace;}
+
+/* REFRESH */
+.refresh-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:.5rem 1rem;border-radius:6px;font-size:.75rem;cursor:pointer;transition:all .2s;margin-left:auto;display:block;margin-bottom:1rem;}
+.refresh-btn:hover{border-color:var(--orange);color:var(--orange);}
+
+/* LOADING */
+.loading-msg{text-align:center;color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.85rem;padding:3rem;}
+.empty-msg{text-align:center;color:var(--muted);font-size:.85rem;padding:3rem;}
+
+/* MOBILE */
+@media(max-width:600px){
+  .dashboard{padding:1rem;}
+  .order-header{gap:.5rem;}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <div class="login-title">SBA <span style="color:var(--orange)">ADMIN</span></div>
+    <div class="login-sub">Super Bell Alliance · Mint Control Panel</div>
+    <input type="text" id="worker-url" class="login-input" placeholder="Worker URL (https://sba-mint.xxx.workers.dev)" value=""/>
+    <input type="password" id="admin-pw" class="login-input" placeholder="Admin Password"/>
+    <button class="login-btn" onclick="doLogin()">⬡ ACCESS PANEL</button>
+    <div id="login-err" class="login-err">❌ Invalid password or Worker URL</div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="dashboard">
+  <div class="dash-header">
+    <div class="dash-title">SBA <span>ADMIN</span> PANEL</div>
+    <button class="logout-btn" onclick="doLogout()">Logout</button>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-val orange" id="stat-sold">—</div>
+      <div class="stat-lbl">TOTAL SOLD</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val green" id="stat-remaining">—</div>
+      <div class="stat-lbl">REMAINING</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val red" id="stat-pending">—</div>
+      <div class="stat-lbl">PENDING DELIVERY</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="stat-done">—</div>
+      <div class="stat-lbl">DELIVERED</div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('pending')">⏳ Pending</button>
+    <button class="tab" onclick="showTab('all')">📋 All Orders</button>
+  </div>
+
+  <button class="refresh-btn" onclick="loadOrders()">↻ Refresh</button>
+
+  <div id="orders-list" class="orders-list">
+    <div class="loading-msg">Loading orders...</div>
+  </div>
+</div>
+
+<script>
+const WORKER_URL_KEY = 'sba_worker_url';
+const ADMIN_PW_KEY   = 'sba_admin_pw';
+
+let workerUrl = '';
+let adminPw   = '';
+let allOrders = [];
+let currentTab = 'pending';
+
+// ── LOGIN ────────────────────────────────
+async function doLogin(){
+  workerUrl = document.getElementById('worker-url').value.trim().replace(/\/$/,'');
+  adminPw   = document.getElementById('admin-pw').value.trim();
+
+  if(!workerUrl || !adminPw){
+    showErr('Please fill in both fields.'); return;
+  }
+
+  try{
+    const resp = await fetch(`${workerUrl}/admin?pw=${encodeURIComponent(adminPw)}`);
+    if(resp.status === 401){ showErr('Wrong password.'); return; }
+    if(!resp.ok){ showErr('Worker error: '+resp.status); return; }
+
+    const data = await resp.json();
+
+    // Save to session
+    sessionStorage.setItem(WORKER_URL_KEY, workerUrl);
+    sessionStorage.setItem(ADMIN_PW_KEY, adminPw);
+
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+
+    updateStats(data.stats);
+    allOrders = data.orders;
+    renderOrders();
+
+  } catch(e){
+    showErr('Cannot reach Worker. Check URL.');
+    console.error(e);
+  }
+}
+
+function showErr(msg){
+  const el = document.getElementById('login-err');
+  el.textContent = '❌ '+msg;
+  el.style.display = 'block';
+}
+
+function doLogout(){
+  sessionStorage.clear();
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('dashboard').style.display = 'none';
+  workerUrl = ''; adminPw = '';
+}
+
+// ── LOAD DATA ────────────────────────────
+async function loadOrders(){
+  document.getElementById('orders-list').innerHTML = '<div class="loading-msg">Loading...</div>';
+  try{
+    const resp = await fetch(`${workerUrl}/admin?pw=${encodeURIComponent(adminPw)}`);
+    const data = await resp.json();
+    updateStats(data.stats);
+    allOrders = data.orders;
+    renderOrders();
+  } catch(e){
+    document.getElementById('orders-list').innerHTML = '<div class="loading-msg">Error loading orders.</div>';
+  }
+}
+
+function updateStats(stats){
+  if(!stats) return;
+  document.getElementById('stat-sold').textContent      = stats.sold || 0;
+  document.getElementById('stat-remaining').textContent = stats.remaining || 0;
+  document.getElementById('stat-pending').textContent   = stats.pendingDelivery || 0;
+  document.getElementById('stat-done').textContent      = stats.completed || 0;
+}
+
+// ── TABS ─────────────────────────────────
+function showTab(tab){
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', (i===0 && tab==='pending') || (i===1 && tab==='all'));
+  });
+  renderOrders();
+}
+
+// ── RENDER ────────────────────────────────
+function renderOrders(){
+  const list = document.getElementById('orders-list');
+  let orders = currentTab === 'pending'
+    ? allOrders.filter(o => o.status === 'pending')
+    : allOrders;
+
+  if(!orders.length){
+    list.innerHTML = `<div class="empty-msg">${currentTab==='pending' ? '✅ No pending deliveries!' : 'No orders yet.'}</div>`;
+    return;
+  }
+
+  list.innerHTML = orders.map(o => `
+    <div class="order-card ${o.status}" id="oc-${o.id}">
+      <div class="order-header" onclick="toggleOrder('${o.id}')">
+        <div>
+          <div class="order-summary">
+            ${o.qty} Hero${o.qty>1?'es':''} · ${o.total} BEL
+          </div>
+          <div class="order-id">${o.id}</div>
+          <div class="order-time">${formatTime(o.createdAt)}</div>
+        </div>
+        <span class="order-status status-${o.status}">${o.status.toUpperCase()}</span>
+      </div>
+      <div class="order-body" id="ob-${o.id}">
+        <div class="order-detail-row">
+          <span class="detail-lbl">Buyer Wallet</span>
+          <span class="detail-val">${o.walletAddr}</span>
+        </div>
+        <div class="order-detail-row">
+          <span class="detail-lbl">Delivery Address</span>
+          <span class="detail-val">${o.deliveryAddr}</span>
+        </div>
+        <div class="order-detail-row">
+          <span class="detail-lbl">TX Hash</span>
+          <span class="detail-val">${o.txId}</span>
+        </div>
+        <div class="order-detail-row">
+          <span class="detail-lbl">Amount Paid</span>
+          <span class="detail-val">${o.total} BEL</span>
+        </div>
+        ${o.sentAt ? `<div class="order-detail-row"><span class="detail-lbl">Sent At</span><span class="detail-val">${formatTime(o.sentAt)}</span></div>` : ''}
+        <div class="heroes-list">
+          ${(o.drawn||[]).map(s=>`
+            <div class="hero-item">
+              <span class="hero-name">${s.name}</span>
+              <span class="hero-rank">Rank #${s.rank} · ${s.score} pts</span>
+            </div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:.65rem;color:var(--muted);padding:.2rem .6rem .6rem;word-break:break-all;">
+              ID: ${s.id || 'N/A'}
+            </div>
+          `).join('')}
+        </div>
+        ${o.status === 'pending'
+          ? `<button class="mark-sent-btn" id="msb-${o.id}" onclick="markSent('${o.id}')">✅ MARK AS SENT</button>`
+          : `<div class="already-sent">✅ Inscription delivered</div>`
+        }
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleOrder(id){
+  const body = document.getElementById('ob-'+id);
+  body.classList.toggle('open');
+}
+
+// ── MARK SENT ────────────────────────────
+async function markSent(orderId){
+  const btn = document.getElementById('msb-'+orderId);
+  if(btn){ btn.disabled=true; btn.textContent='Marking...'; }
+
+  try{
+    const resp = await fetch(`${workerUrl}/mark-sent?pw=${encodeURIComponent(adminPw)}`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ orderId })
+    });
+
+    if(!resp.ok) throw new Error('Failed: '+resp.status);
+
+    // Update local state
+    const order = allOrders.find(o => o.id === orderId);
+    if(order){ order.status = 'sent'; order.sentAt = new Date().toISOString(); }
+
+    renderOrders();
+    await loadOrders(); // refresh stats
+
+  } catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='✅ MARK AS SENT'; }
+    alert('Error marking as sent: '+e.message);
+  }
+}
+
+// ── HELPERS ──────────────────────────────
+function formatTime(iso){
+  if(!iso) return '—';
+  return new Date(iso).toLocaleString('en-MY',{timeZone:'Asia/Kuala_Lumpur',
+    day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+// Auto-login from session
+window.onload = function(){
+  const savedUrl = sessionStorage.getItem(WORKER_URL_KEY);
+  const savedPw  = sessionStorage.getItem(ADMIN_PW_KEY);
+  if(savedUrl && savedPw){
+    document.getElementById('worker-url').value = savedUrl;
+    document.getElementById('admin-pw').value   = savedPw;
+    workerUrl = savedUrl; adminPw = savedPw;
+    // Auto attempt login
+    doLogin();
+  }
+};
+</script>
+</body>
+</html>
