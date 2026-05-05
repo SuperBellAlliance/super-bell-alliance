@@ -6,7 +6,7 @@
 <title>Mint Your Hero — Super Bell Alliance</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Orbitron:wght@400;600;700;900&family=Inter:wght@300;400;500&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+
 <style>
 :root{
   --orange:#FF6B1A;--orange2:#FF8C42;--gold:#C9A84C;--gold2:#F0C96B;
@@ -208,6 +208,7 @@ main{position:relative;z-index:1;padding-top:80px;min-height:100vh;}
 }
 </style>
 <script src="wallet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js" defer></script>
 <script>
 (function() {
   let realConnect = null;
@@ -384,7 +385,15 @@ let drawnSBAs = [];
 // ═══════════════════════════════════════════
 // EMAILJS INIT
 // ═══════════════════════════════════════════
-emailjs.init(EMAILJS_PUBLIC_KEY);
+// Init EmailJS safely
+(function initEmailJS(){
+  if(typeof emailjs !== 'undefined'){
+    emailjs.init(EMAILJS_PUBLIC_KEY);
+    console.log('[SBA] EmailJS ready');
+  } else {
+    setTimeout(initEmailJS, 500);
+  }
+})();
 
 // ═══════════════════════════════════════════
 // BG PARTICLE CANVAS
