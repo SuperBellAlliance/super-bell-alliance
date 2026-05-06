@@ -16,6 +16,10 @@
   // We poll for up to 10 seconds.
   async function waitForNintondo(timeoutMs) {
     timeoutMs = timeoutMs || 10000;
+    // Wait for DOM to be ready first
+    if(document.readyState !== 'complete'){
+      await new Promise(function(r){ window.addEventListener('load', r, {once:true}); });
+    }
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       if (window.nintondo) {

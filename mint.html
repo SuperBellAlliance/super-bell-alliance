@@ -281,7 +281,7 @@ main{position:relative;z-index:1;padding-top:80px;min-height:100vh;}
           <div class="wallet-dot"></div>
           <span class="wallet-addr" id="wallet-display"></span>
         </div>
-        <button class="wallet-disc" onclick="disconnectWallet()">Disconnect</button>
+        <button class="wallet-disc" onclick="if(typeof disconnectWallet==='function')disconnectWallet()">Disconnect</button>
       </div>
 
       <div class="mint-section">
@@ -761,10 +761,7 @@ let drawnSBAs = [];
 })();
 
 
-// Expose window globals (same pattern as assemble.html and dashboard.html)
-window.disconnectWallet = disconnectWallet;
-window.toggleTheme = typeof toggleTheme !== 'undefined' ? toggleTheme : function(){};
-console.log('[SBA] Window globals exposed');
+// window globals exposed in bottom script block
 </script>
 <script>
 // ═══════════════════════════════════════════
