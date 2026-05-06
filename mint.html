@@ -209,11 +209,16 @@ main{position:relative;z-index:1;padding-top:80px;min-height:100vh;}
 </style>
 <script src="wallet.js"></script>
 <script>
+// Placeholder connectWallet that waits for real implementation
 (function() {
   let realConnect = null;
+  
+  // Define a placeholder
   window.connectWallet = function() {
     console.log('[SBA] connectWallet called - waiting for full load...');
     if (realConnect) return realConnect.apply(this, arguments);
+    
+    // Try every 100ms for up to 5 seconds
     let attempts = 0;
     const tryRealConnect = function() {
       attempts++;
@@ -221,8 +226,11 @@ main{position:relative;z-index:1;padding-top:80px;min-height:100vh;}
         realConnect = window._realConnectWallet;
         return realConnect();
       }
-      if (attempts < 50) setTimeout(tryRealConnect, 100);
-      else alert('Connection system loading. Please wait and try again.');
+      if (attempts < 50) {
+        setTimeout(tryRealConnect, 100);
+      } else {
+        alert('Connection system loading. Please wait a moment and try again.');
+      }
     };
     tryRealConnect();
   };
