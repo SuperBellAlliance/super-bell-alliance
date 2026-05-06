@@ -535,12 +535,25 @@ async function doMint(){
 
       if(!signed) throw new Error('Transaction not signed');
 
-      // Broadcast
+      // Broadcast - try multiple methods
+      addLog('Broadcasting to network...','active');
+      console.log('[SBA] signPsbt returned:', typeof signed, signed ? signed.slice(0,30) : 'null');
+
+      // Try to extract raw tx hex from signed PSBT
+      let rawTxHex = null;
+      try {
+        if(window.nintondo.pushPsbt) { rawTxHex = await window.nintondo.pushPsbt(signed); console.log('[SBA] pushPsbt:', rawTxHex); }
+        else if(window.nintondo.extractTx) { rawTxHex = await window.nintondo.extractTx(signed); }
+        else if(window.nintondo.finalizePsbt) { rawTxHex = await window.nintondo.finalizePsbt(signed); }
+      } catch(ex) { console.log('[SBA] extract failed:', ex.message); }
+
       const br = await fetch(WORKER_URL+'/broadcast', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({signedPsbt: signed})
+        body: JSON.stringify({ signedPsbt: signed, rawTxHex })
       });
       const brData = await br.json();
+      console.log('[SBA] Broadcast result:', brData);
+      if(brData.details) brData.details.forEach(d => console.log('[SBA]', d));
       mintSession = { qty, walletAddr, deliveryAddr, total, txId: brData.txid||signed.slice(0,20)+'...', time: new Date().toISOString() };
     } else {
       // Fallback: direct createTx
