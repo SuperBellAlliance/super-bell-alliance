@@ -360,7 +360,51 @@ main{position:relative;z-index:1;padding-top:80px;min-height:100vh;}
 </div>
 
 
-<script>
+<script>// ═══════════════════════════════════════════
+// WALLET — mirrors assemble.html exactly
+// ═══════════════════════════════════════════
+window._realConnectWallet = async function(){
+  const btn = document.getElementById('connect-btn');
+  if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
+  
+  const addr = await window.SBAWallet.connect();
+  
+  if(!addr){
+    if(btn){ btn.textContent='⬡ Connect Nintondo Wallet'; btn.disabled=false; }
+    return;
+  }
+  
+  window.walletAddr = addr;
+  walletAddr = addr;
+
+  // Show wallet bar
+  const bar = document.getElementById('wallet-bar');
+  if(bar) bar.classList.add('show');
+  const display = document.getElementById('wallet-display');
+  if(display) display.textContent = addr.slice(0,8)+'...'+addr.slice(-6);
+
+  // Hide connect area, show qty section
+  const connectArea = document.getElementById('connect-area');
+  if(connectArea) connectArea.style.display = 'none';
+  const qtySection = document.getElementById('qty-section');
+  if(qtySection) qtySection.classList.add('show');
+};
+
+function disconnectWallet(){
+  try{ if(window.nintondo && window.nintondo.disconnect) window.nintondo.disconnect(); } catch(e){}
+  walletAddr = '';
+  const bar = document.getElementById('wallet-bar');
+  if(bar) bar.classList.remove('show');
+  const connectArea = document.getElementById('connect-area');
+  if(connectArea) connectArea.style.display = 'block';
+  const qtySection = document.getElementById('qty-section');
+  if(qtySection) qtySection.classList.remove('show');
+  const drawSection = document.getElementById('draw-section');
+  if(drawSection) drawSection.classList.remove('show');
+}
+
+
+
 // ═══════════════════════════════════════════
 // CONFIG — Update these with your credentials
 // ═══════════════════════════════════════════
@@ -407,6 +451,7 @@ let drawnSBAs = [];
 // ═══════════════════════════════════════════
 (function(){
   const c = document.getElementById('bg-canvas');
+  if(!c) return; // Safety check - don't crash if canvas not found
   const ctx = c.getContext('2d');
   let W, H, pts = [];
   const resize = () => { W = c.width = innerWidth; H = c.height = innerHeight; };
@@ -434,49 +479,6 @@ let drawnSBAs = [];
   }
   frame();
 })();
-
-// ═══════════════════════════════════════════
-// WALLET — mirrors assemble.html exactly
-// ═══════════════════════════════════════════
-window._realConnectWallet = async function(){
-  const btn = document.getElementById('connect-btn');
-  if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
-  
-  const addr = await window.SBAWallet.connect();
-  
-  if(!addr){
-    if(btn){ btn.textContent='⬡ Connect Nintondo Wallet'; btn.disabled=false; }
-    return;
-  }
-  
-  window.walletAddr = addr;
-  walletAddr = addr;
-
-  // Show wallet bar
-  const bar = document.getElementById('wallet-bar');
-  if(bar) bar.classList.add('show');
-  const display = document.getElementById('wallet-display');
-  if(display) display.textContent = addr.slice(0,8)+'...'+addr.slice(-6);
-
-  // Hide connect area, show qty section
-  const connectArea = document.getElementById('connect-area');
-  if(connectArea) connectArea.style.display = 'none';
-  const qtySection = document.getElementById('qty-section');
-  if(qtySection) qtySection.classList.add('show');
-};
-
-function disconnectWallet(){
-  try{ if(window.nintondo && window.nintondo.disconnect) window.nintondo.disconnect(); } catch(e){}
-  walletAddr = '';
-  const bar = document.getElementById('wallet-bar');
-  if(bar) bar.classList.remove('show');
-  const connectArea = document.getElementById('connect-area');
-  if(connectArea) connectArea.style.display = 'block';
-  const qtySection = document.getElementById('qty-section');
-  if(qtySection) qtySection.classList.remove('show');
-  const drawSection = document.getElementById('draw-section');
-  if(drawSection) drawSection.classList.remove('show');
-}
 
 // ═══════════════════════════════════════════
 // QUANTITY
