@@ -516,10 +516,15 @@ async function doMint(){
     // The wallet needs rawHex to avoid "beyond buffer length"
 
     if(d.utxos && window.nintondo.signPsbt) {
-      // Build proper PSBT for segwit P2WPKH
+      // Build outputs client-side (don't rely on worker response)
+      const outputs = [
+        { address: PAYMENT_ADDR, value: amountSats },
+        ...(d.change > 1000 ? [{ address: walletAddr, value: d.change }] : [])
+      ];
+      console.log('[SBA] Outputs:', JSON.stringify(outputs));
       const scriptPubKeyHex = bytesToHex(bech32ToScript(walletAddr));
       console.log('[SBA] scriptPubKey:', scriptPubKeyHex);
-      const psbtBase64 = writePSBT(d.utxos, d.outputs, walletAddr, scriptPubKeyHex);
+      const psbtBase64 = writePSBT(d.utxos, outputs, walletAddr, scriptPubKeyHex);
       console.log('[SBA] PSBT built, length:', psbtBase64.length);
       console.log('[SBA] Calling signPsbt...');
 
