@@ -496,37 +496,55 @@ async function doMint(){
   try{
     const amountSats = Math.round(total * 1e8);
     addLog('Building transaction...','active');
-    console.log('[SBA] Requesting PSBT from Worker...');
+    console.log('[SBA] Fetching UTXOs from Worker...');
 
-    // Step 1: Get PSBT from Worker
+    // Get UTXOs + raw tx data from Worker
     const psbtResp = await fetch(WORKER_URL+'/build-psbt', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ fromAddress: walletAddr, toAddress: PAYMENT_ADDR, amountSats, feeRate: 10 })
+      body: JSON.stringify({ fromAddress:walletAddr, toAddress:PAYMENT_ADDR, amountSats, feeRate:10 })
     });
-    if(!psbtResp.ok) throw new Error('Failed to build tx: '+psbtResp.status);
-    const psbtData = await psbtResp.json();
-    if(psbtData.error) throw new Error(psbtData.error);
-    console.log('[SBA] Worker response:', psbtData);
+    if(!psbtResp.ok) throw new Error('Worker error: '+psbtResp.status);
+    const d = await psbtResp.json();
+    if(d.error) throw new Error(d.error);
+    console.log('[SBA] Worker data:', d);
 
-    if(psbtData.needsClientBuild || !psbtData.psbtBase64){
-      // Fallback to createTx
-      addLog('Requesting payment from wallet...','active');
-      const signedTx = await window.nintondo.createTx({ to: PAYMENT_ADDR, amount: amountSats, receiverToPayFee: true, feeRate: 10 });
+    addLog('Please sign in your Nintondo wallet...','active');
+
+    // Build PSBT hex using raw tx data + belcoinjs approach
+    // We pass the UTXO data to nintondo's signPsbt via a specially crafted PSBT
+    // First try: use nintondo's own createTx but provide witnessUtxo hint via console
+    // The wallet needs rawHex to avoid "beyond buffer length"
+
+    if(d.utxos && window.nintondo.signPsbt) {
+      // Build proper PSBT for segwit P2WPKH
+      const scriptPubKeyHex = bytesToHex(bech32ToScript(walletAddr));
+      console.log('[SBA] scriptPubKey:', scriptPubKeyHex);
+      const psbtBase64 = writePSBT(d.utxos, d.outputs, walletAddr, scriptPubKeyHex);
+      console.log('[SBA] PSBT built, length:', psbtBase64.length);
+      console.log('[SBA] Calling signPsbt...');
+
+      const signed = await window.nintondo.signPsbt(psbtBase64, {
+        autoFinalized: true,
+        toSignInputs: d.utxos.map((u,i) => ({ index:i, address:walletAddr }))
+      });
+
+      if(!signed) throw new Error('Transaction not signed');
+
+      // Broadcast
+      const br = await fetch(WORKER_URL+'/broadcast', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({signedPsbt: signed})
+      });
+      const brData = await br.json();
+      mintSession = { qty, walletAddr, deliveryAddr, total, txId: brData.txid||signed.slice(0,20)+'...', time: new Date().toISOString() };
+    } else {
+      // Fallback: direct createTx
+      addLog('Requesting payment...','active');
+      const signedTx = await window.nintondo.createTx({
+        to: PAYMENT_ADDR, amount: amountSats, receiverToPayFee: true, feeRate: 10
+      });
       if(!signedTx) throw new Error('No transaction returned');
       mintSession = { qty, walletAddr, deliveryAddr, total, txId: signedTx.slice(0,20)+'...', time: new Date().toISOString() };
-    } else {
-      // Step 2: Sign PSBT
-      addLog('Please sign in your Nintondo wallet...','active');
-      const signedPsbt = await window.nintondo.signPsbt(psbtData.psbtBase64, {
-        autoFinalized: true,
-        toSignInputs: psbtData.toSignInputs || []
-      });
-      if(!signedPsbt) throw new Error('Transaction not signed');
-      // Step 3: Broadcast
-      addLog('Broadcasting...','active');
-      const br = await fetch(WORKER_URL+'/broadcast', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({signedPsbt}) });
-      const brData = await br.json();
-      mintSession = { qty, walletAddr, deliveryAddr, total, txId: brData.txid||signedPsbt.slice(0,20)+'...', time: new Date().toISOString() };
     }
 
     addLog('✅ Payment sent! Preparing lucky draw...','ok');
@@ -536,6 +554,7 @@ async function doMint(){
       btn.style.display = 'none';
       document.getElementById('draw-section').scrollIntoView({behavior:'smooth'});
     }, 1500);
+
   } catch(e){
     console.error(e);
     if(e.code===4001||(e.message&&e.message.toLowerCase().includes('reject'))){ addLog('❌ Transaction rejected.','err'); }
@@ -742,6 +761,165 @@ document.getElementById('disc-btn').onclick = disconnectWallet;
 window.disconnectWallet = disconnectWallet;
 window.toggleTheme = typeof toggleTheme !== 'undefined' ? toggleTheme : function(){};
 console.log('[SBA] Window globals exposed');
+
+// ── PSBT Builder for P2WPKH (segwit) ──────────────────────────
+// Builds a valid PSBT binary that Nintondo wallet can sign
+// Based on BIP174 PSBT format
+
+function writePSBT(utxos, outputs, fromAddress, scriptPubKeyHex) {
+  // Helper functions
+  function varInt(n) {
+    if(n < 0xfd) return [n];
+    if(n <= 0xffff) return [0xfd, n&0xff, (n>>8)&0xff];
+    return [0xfe, n&0xff, (n>>8)&0xff, (n>>16)&0xff, (n>>24)&0xff];
+  }
+  
+  function writeUInt32LE(n) {
+    return [n&0xff, (n>>8)&0xff, (n>>16)&0xff, (n>>24)&0xff];
+  }
+  
+  function writeUInt64LE(n) {
+    const lo = n >>> 0;
+    const hi = Math.floor(n / 0x100000000);
+    return [lo&0xff,(lo>>8)&0xff,(lo>>16)&0xff,(lo>>24)&0xff,
+            hi&0xff,(hi>>8)&0xff,(hi>>16)&0xff,(hi>>24)&0xff];
+  }
+  
+  function hexToBytes(hex) {
+    const bytes = [];
+    for(let i=0;i<hex.length;i+=2) bytes.push(parseInt(hex.substr(i,2),16));
+    return bytes;
+  }
+  
+  function reverseBytes(bytes) { return [...bytes].reverse(); }
+  
+  function writeKeyValue(key, value) {
+    return [...varInt(key.length), ...key, ...varInt(value.length), ...value];
+  }
+  
+  // Build unsigned transaction
+  // Version (4 bytes LE)
+  let unsignedTx = [...writeUInt32LE(1)];
+  
+  // Segwit marker + flag (for segwit tx)
+  // Actually for PSBT unsigned tx, we use non-segwit format
+  
+  // Input count
+  unsignedTx.push(...varInt(utxos.length));
+  
+  // Inputs (no scriptSig, sequence 0xffffffff)
+  for(const u of utxos) {
+    const txidBytes = reverseBytes(hexToBytes(u.txid));
+    unsignedTx.push(...txidBytes);
+    unsignedTx.push(...writeUInt32LE(u.vout));
+    unsignedTx.push(0x00); // empty scriptSig
+    unsignedTx.push(...writeUInt32LE(0xffffffff)); // sequence
+  }
+  
+  // Output count
+  unsignedTx.push(...varInt(outputs.length));
+  
+  // Outputs
+  for(const o of outputs) {
+    unsignedTx.push(...writeUInt64LE(o.value));
+    const scriptBytes = bech32ToScript(o.address);
+    unsignedTx.push(...varInt(scriptBytes.length));
+    unsignedTx.push(...scriptBytes);
+  }
+  
+  // Locktime
+  unsignedTx.push(...writeUInt32LE(0));
+  
+  // Build PSBT
+  // Magic bytes
+  let psbt = [0x70, 0x73, 0x62, 0x74, 0xff];
+  
+  // Global: unsigned tx (key=0x00)
+  psbt.push(...writeKeyValue([0x00], unsignedTx));
+  
+  // Global separator
+  psbt.push(0x00);
+  
+  // Per-input maps
+  for(const u of utxos) {
+    const scriptBytes = hexToBytes(scriptPubKeyHex);
+    const valueBytes = writeUInt64LE(u.value);
+    
+    // witnessUtxo (key type = 0x01)
+    const witnessUtxoValue = [...valueBytes, ...varInt(scriptBytes.length), ...scriptBytes];
+    psbt.push(...writeKeyValue([0x01], witnessUtxoValue));
+    
+    // Input separator
+    psbt.push(0x00);
+  }
+  
+  // Per-output maps (empty for simple transfer)
+  for(const o of outputs) {
+    psbt.push(0x00);
+  }
+  
+  // Convert to base64
+  const bytes = new Uint8Array(psbt);
+  let binary = '';
+  for(let i=0;i<bytes.length;i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function bech32ToScript(address) {
+  // Decode bech32 address to scriptPubKey bytes
+  const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+  const addr = address.toLowerCase();
+  const sepIdx = addr.lastIndexOf('1');
+  const data = addr.substring(sepIdx + 1);
+  
+  let decoded = [];
+  for(let c of data) {
+    const idx = CHARSET.indexOf(c);
+    if(idx < 0) return [];
+    decoded.push(idx);
+  }
+  
+  // Skip witness version (first byte) and checksum (last 6)
+  const witnessVersion = decoded[0];
+  const dataBytes = decoded.slice(1, -6);
+  
+  // Convert from 5-bit to 8-bit
+  const converted = convertBits(dataBytes, 5, 8, false);
+  if(!converted) return [];
+  
+  // P2WPKH: OP_0 OP_PUSHBYTES_20 <hash>
+  if(witnessVersion === 0 && converted.length === 20) {
+    return [0x00, 0x14, ...converted];
+  }
+  // P2WSH: OP_0 OP_PUSHBYTES_32 <hash>
+  if(witnessVersion === 0 && converted.length === 32) {
+    return [0x00, 0x20, ...converted];
+  }
+  // P2TR: OP_1 OP_PUSHBYTES_32 <hash>
+  if(witnessVersion === 1 && converted.length === 32) {
+    return [0x51, 0x20, ...converted];
+  }
+  return [];
+}
+
+function bytesToHex(bytes) {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function convertBits(data, from, to, pad) {
+  let acc = 0, bits = 0;
+  const result = [];
+  const maxv = (1 << to) - 1;
+  for(const v of data) {
+    acc = (acc << from) | v;
+    bits += from;
+    while(bits >= to) { bits -= to; result.push((acc >> bits) & maxv); }
+  }
+  if(pad && bits > 0) result.push((acc << (to - bits)) & maxv);
+  else if(bits >= from || ((acc << (to - bits)) & maxv)) return null;
+  return result;
+}
+
 </script>
 
 </body>
