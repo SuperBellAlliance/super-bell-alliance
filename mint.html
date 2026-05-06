@@ -821,8 +821,13 @@ function writePSBT(utxos, outputs, fromAddress, scriptPubKeyHex) {
   
   // Outputs
   for(const o of outputs) {
+    if(!o || o.value === undefined) { console.error('[SBA] Bad output:', o); continue; }
     unsignedTx.push(...writeUInt64LE(o.value));
     const scriptBytes = bech32ToScript(o.address);
+    if(!scriptBytes || scriptBytes.length === 0) { 
+      console.error('[SBA] Could not decode address:', o.address);
+      throw new Error('Cannot decode address: ' + o.address);
+    }
     unsignedTx.push(...varInt(scriptBytes.length));
     unsignedTx.push(...scriptBytes);
   }
@@ -854,7 +859,7 @@ function writePSBT(utxos, outputs, fromAddress, scriptPubKeyHex) {
   }
   
   // Per-output maps (empty for simple transfer)
-  for(const o of outputs) {
+  for(let i = 0; i < outputs.length; i++) {
     psbt.push(0x00);
   }
   
