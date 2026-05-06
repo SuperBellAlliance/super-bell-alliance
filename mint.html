@@ -361,126 +361,6 @@ main{position:relative;z-index:1;padding-top:80px;min-height:100vh;}
 
 
 <script>// ═══════════════════════════════════════════
-// WALLET — mirrors assemble.html exactly
-// ═══════════════════════════════════════════
-window._realConnectWallet = async function(){
-  const btn = document.getElementById('connect-btn');
-  if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
-  
-  const addr = await window.SBAWallet.connect();
-  
-  if(!addr){
-    if(btn){ btn.textContent='⬡ Connect Nintondo Wallet'; btn.disabled=false; }
-    return;
-  }
-  
-  window.walletAddr = addr;
-  walletAddr = addr;
-
-  // Show wallet bar
-  const bar = document.getElementById('wallet-bar');
-  if(bar) bar.classList.add('show');
-  const display = document.getElementById('wallet-display');
-  if(display) display.textContent = addr.slice(0,8)+'...'+addr.slice(-6);
-
-  // Hide connect area, show qty section
-  const connectArea = document.getElementById('connect-area');
-  if(connectArea) connectArea.style.display = 'none';
-  const qtySection = document.getElementById('qty-section');
-  if(qtySection) qtySection.classList.add('show');
-};
-
-function disconnectWallet(){
-  try{ if(window.nintondo && window.nintondo.disconnect) window.nintondo.disconnect(); } catch(e){}
-  walletAddr = '';
-  const bar = document.getElementById('wallet-bar');
-  if(bar) bar.classList.remove('show');
-  const connectArea = document.getElementById('connect-area');
-  if(connectArea) connectArea.style.display = 'block';
-  const qtySection = document.getElementById('qty-section');
-  if(qtySection) qtySection.classList.remove('show');
-  const drawSection = document.getElementById('draw-section');
-  if(drawSection) drawSection.classList.remove('show');
-}
-
-
-
-// ═══════════════════════════════════════════
-// CONFIG — Update these with your credentials
-// ═══════════════════════════════════════════
-const PAYMENT_ADDR = 'bel1q0l2z7dqufnmgj4gn9z7z0peeq00t5mpzu257hx';
-const MINT_PRICE   = 40;
-const MAX_QTY      = 10;
-const CDN_CONTENT  = 'https://bells-mainnet-content.nintondo.io/content/';
-
-// EmailJS
-const EMAILJS_SERVICE_ID  = 'service_ttxh5ix';
-const EMAILJS_TEMPLATE_ID = 'template_l6wz98v';
-const EMAILJS_PUBLIC_KEY  = 'kTr88F9dtS7WIajpN';
-
-// Cloudflare Worker (deploy later — set URL here)
-const WORKER_URL = 'https://sba.superbellalliance.workers.dev';
-
-// Telegram (via Worker — not exposed in frontend)
-// Bot Token & Chat ID are stored securely in Worker env vars
-
-// ═══════════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════════
-let qty = 1;
-let walletAddr = '';
-let customDelivery = false;
-let pendingTxHex = null;
-let drawnSBAs = [];
-
-// ═══════════════════════════════════════════
-// EMAILJS INIT
-// ═══════════════════════════════════════════
-// Init EmailJS safely
-(function initEmailJS(){
-  if(typeof emailjs !== 'undefined'){
-    emailjs.init(EMAILJS_PUBLIC_KEY);
-    console.log('[SBA] EmailJS ready');
-  } else {
-    setTimeout(initEmailJS, 500);
-  }
-})();
-
-// ═══════════════════════════════════════════
-// BG PARTICLE CANVAS
-// ═══════════════════════════════════════════
-(function(){
-  const c = document.getElementById('bg-canvas');
-  if(!c) return; // Safety check - don't crash if canvas not found
-  const ctx = c.getContext('2d');
-  let W, H, pts = [];
-  const resize = () => { W = c.width = innerWidth; H = c.height = innerHeight; };
-  resize(); addEventListener('resize', resize);
-  class P {
-    constructor(){ this.reset(); }
-    reset(){
-      this.x = Math.random()*W; this.y = Math.random()*H;
-      this.vx = (Math.random()-.5)*.3; this.vy = (Math.random()-.5)*.3;
-      this.r = Math.random()*1.5+.5; this.a = Math.random();
-    }
-    update(){ this.x+=this.vx; this.y+=this.vy; if(this.x<0||this.x>W||this.y<0||this.y>H) this.reset(); }
-    draw(){ ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fillStyle=`rgba(255,107,26,${this.a*.3})`; ctx.fill(); }
-  }
-  for(let i=0;i<60;i++) pts.push(new P());
-  function frame(){
-    ctx.clearRect(0,0,W,H);
-    pts.forEach(p=>{ p.update(); p.draw(); });
-    for(let i=0;i<pts.length;i++) for(let j=i+1;j<pts.length;j++){
-      const dx=pts[i].x-pts[j].x, dy=pts[i].y-pts[j].y, d=Math.sqrt(dx*dx+dy*dy);
-      if(d<120){ ctx.beginPath(); ctx.moveTo(pts[i].x,pts[i].y); ctx.lineTo(pts[j].x,pts[j].y);
-        ctx.strokeStyle=`rgba(255,107,26,${.08*(1-d/120)})`; ctx.lineWidth=.5; ctx.stroke(); }
-    }
-    requestAnimationFrame(frame);
-  }
-  frame();
-})();
-
-// ═══════════════════════════════════════════
 // QUANTITY
 // ═══════════════════════════════════════════
 function changeQty(d){
@@ -812,7 +692,128 @@ function playBell(){
 }
 
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+// ═══════════════════════════════════════════
+// CONFIG — Update these with your credentials
+// ═══════════════════════════════════════════
+const PAYMENT_ADDR = 'bel1q0l2z7dqufnmgj4gn9z7z0peeq00t5mpzu257hx';
+const MINT_PRICE   = 40;
+const MAX_QTY      = 10;
+const CDN_CONTENT  = 'https://bells-mainnet-content.nintondo.io/content/';
+
+// EmailJS
+const EMAILJS_SERVICE_ID  = 'service_ttxh5ix';
+const EMAILJS_TEMPLATE_ID = 'template_l6wz98v';
+const EMAILJS_PUBLIC_KEY  = 'kTr88F9dtS7WIajpN';
+
+// Cloudflare Worker (deploy later — set URL here)
+const WORKER_URL = 'https://sba.superbellalliance.workers.dev';
+
+// Telegram (via Worker — not exposed in frontend)
+// Bot Token & Chat ID are stored securely in Worker env vars
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let qty = 1;
+let walletAddr = '';
+let customDelivery = false;
+let pendingTxHex = null;
+let drawnSBAs = [];
+
+// ═══════════════════════════════════════════
+// EMAILJS INIT
+// ═══════════════════════════════════════════
+// EmailJS initialized at bottom of page
+
+// ═══════════════════════════════════════════
+// BG PARTICLE CANVAS
+// ═══════════════════════════════════════════
+(function(){
+  const c = document.getElementById('bg-canvas');
+  if(!c) return; // Safety check - don't crash if canvas not found
+  const ctx = c.getContext('2d');
+  let W, H, pts = [];
+  const resize = () => { W = c.width = innerWidth; H = c.height = innerHeight; };
+  resize(); addEventListener('resize', resize);
+  class P {
+    constructor(){ this.reset(); }
+    reset(){
+      this.x = Math.random()*W; this.y = Math.random()*H;
+      this.vx = (Math.random()-.5)*.3; this.vy = (Math.random()-.5)*.3;
+      this.r = Math.random()*1.5+.5; this.a = Math.random();
+    }
+    update(){ this.x+=this.vx; this.y+=this.vy; if(this.x<0||this.x>W||this.y<0||this.y>H) this.reset(); }
+    draw(){ ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fillStyle=`rgba(255,107,26,${this.a*.3})`; ctx.fill(); }
+  }
+  for(let i=0;i<60;i++) pts.push(new P());
+  function frame(){
+    ctx.clearRect(0,0,W,H);
+    pts.forEach(p=>{ p.update(); p.draw(); });
+    for(let i=0;i<pts.length;i++) for(let j=i+1;j<pts.length;j++){
+      const dx=pts[i].x-pts[j].x, dy=pts[i].y-pts[j].y, d=Math.sqrt(dx*dx+dy*dy);
+      if(d<120){ ctx.beginPath(); ctx.moveTo(pts[i].x,pts[i].y); ctx.lineTo(pts[j].x,pts[j].y);
+        ctx.strokeStyle=`rgba(255,107,26,${.08*(1-d/120)})`; ctx.lineWidth=.5; ctx.stroke(); }
+    }
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+
+
+// Expose window globals (same pattern as assemble.html and dashboard.html)
+window.disconnectWallet = disconnectWallet;
+window.toggleTheme = typeof toggleTheme !== 'undefined' ? toggleTheme : function(){};
+console.log('[SBA] Window globals exposed');
 </script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script>
+// ═══════════════════════════════════════════
+// WALLET — mirrors assemble.html exactly
+// ═══════════════════════════════════════════
+window._realConnectWallet = async function(){
+  const btn = document.getElementById('connect-btn');
+  if(btn){ btn.textContent='Connecting...'; btn.disabled=true; }
+  
+  const addr = await window.SBAWallet.connect();
+  
+  if(!addr){
+    if(btn){ btn.textContent='⬡ Connect Nintondo Wallet'; btn.disabled=false; }
+    return;
+  }
+  
+  window.walletAddr = addr;
+  walletAddr = addr;
+
+  // Show wallet bar
+  const bar = document.getElementById('wallet-bar');
+  if(bar) bar.classList.add('show');
+  const display = document.getElementById('wallet-display');
+  if(display) display.textContent = addr.slice(0,8)+'...'+addr.slice(-6);
+
+  // Hide connect area, show qty section
+  const connectArea = document.getElementById('connect-area');
+  if(connectArea) connectArea.style.display = 'none';
+  const qtySection = document.getElementById('qty-section');
+  if(qtySection) qtySection.classList.add('show');
+};
+
+function disconnectWallet(){
+  try{ if(window.nintondo && window.nintondo.disconnect) window.nintondo.disconnect(); } catch(e){}
+  walletAddr = '';
+  const bar = document.getElementById('wallet-bar');
+  if(bar) bar.classList.remove('show');
+  const connectArea = document.getElementById('connect-area');
+  if(connectArea) connectArea.style.display = 'block';
+  const qtySection = document.getElementById('qty-section');
+  if(qtySection) qtySection.classList.remove('show');
+  const drawSection = document.getElementById('draw-section');
+  if(drawSection) drawSection.classList.remove('show');
+}
+
+// Expose globals - same as assemble.html line 858
+window.disconnectWallet = disconnectWallet;
+window.toggleTheme = typeof toggleTheme !== 'undefined' ? toggleTheme : function(){};
+console.log('[SBA] Window globals exposed');
+</script>
 </body>
 </html>
