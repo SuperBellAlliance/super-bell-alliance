@@ -494,18 +494,42 @@ async function doMint(){
   addLog('Requesting payment from wallet...','active');
 
   try{
-    // Per Nintondo SDK docs: amount in satoshis, receiverToPayFee: true
     const amountSats = Math.round(total * 1e8);
-    console.log('[SBA] createTx:', amountSats, 'sats to', PAYMENT_ADDR);
-    const signedTxHex = await window.nintondo.createTx({
-      to: PAYMENT_ADDR,
-      amount: amountSats,
-      receiverToPayFee: true,
-      feeRate: 10
+    addLog('Building transaction...','active');
+    console.log('[SBA] Requesting PSBT from Worker...');
+
+    // Step 1: Get PSBT from Worker
+    const psbtResp = await fetch(WORKER_URL+'/build-psbt', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ fromAddress: walletAddr, toAddress: PAYMENT_ADDR, amountSats, feeRate: 10 })
     });
-    if(!signedTxHex) throw new Error('No transaction returned');
+    if(!psbtResp.ok) throw new Error('Failed to build tx: '+psbtResp.status);
+    const psbtData = await psbtResp.json();
+    if(psbtData.error) throw new Error(psbtData.error);
+    console.log('[SBA] Worker response:', psbtData);
+
+    if(psbtData.needsClientBuild || !psbtData.psbtBase64){
+      // Fallback to createTx
+      addLog('Requesting payment from wallet...','active');
+      const signedTx = await window.nintondo.createTx({ to: PAYMENT_ADDR, amount: amountSats, receiverToPayFee: true, feeRate: 10 });
+      if(!signedTx) throw new Error('No transaction returned');
+      mintSession = { qty, walletAddr, deliveryAddr, total, txId: signedTx.slice(0,20)+'...', time: new Date().toISOString() };
+    } else {
+      // Step 2: Sign PSBT
+      addLog('Please sign in your Nintondo wallet...','active');
+      const signedPsbt = await window.nintondo.signPsbt(psbtData.psbtBase64, {
+        autoFinalized: true,
+        toSignInputs: psbtData.toSignInputs || []
+      });
+      if(!signedPsbt) throw new Error('Transaction not signed');
+      // Step 3: Broadcast
+      addLog('Broadcasting...','active');
+      const br = await fetch(WORKER_URL+'/broadcast', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({signedPsbt}) });
+      const brData = await br.json();
+      mintSession = { qty, walletAddr, deliveryAddr, total, txId: brData.txid||signedPsbt.slice(0,20)+'...', time: new Date().toISOString() };
+    }
+
     addLog('✅ Payment sent! Preparing lucky draw...','ok');
-    mintSession = { qty, walletAddr, deliveryAddr, total, txId: signedTxHex.slice(0,20)+'...', time: new Date().toISOString() };
     setTimeout(()=>{
       document.getElementById('draw-qty-lbl').textContent = qty;
       document.getElementById('draw-section').classList.add('show');
@@ -514,13 +538,8 @@ async function doMint(){
     }, 1500);
   } catch(e){
     console.error(e);
-    if(e.code === -32603 || (e.message && e.message.includes('buffer'))){
-      addLog('❌ Amount too low or insufficient UTXO. Try higher quantity.','err');
-    } else if(e.code === 4001 || (e.message && e.message.toLowerCase().includes('reject'))){
-      addLog('❌ Transaction rejected by user.','err');
-    } else {
-      addLog('❌ '+(e.message||String(e)),'err');
-    }
+    if(e.code===4001||(e.message&&e.message.toLowerCase().includes('reject'))){ addLog('❌ Transaction rejected.','err'); }
+    else { addLog('❌ '+(e.message||String(e)),'err'); }
     btn.disabled = false;
   }
 }
