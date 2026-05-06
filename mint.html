@@ -494,10 +494,13 @@ async function doMint(){
   addLog('Requesting payment from wallet...','active');
 
   try{
+    // Per Nintondo SDK docs: amount in satoshis, receiverToPayFee: true
+    const amountSats = Math.round(total * 1e8);
+    console.log('[SBA] createTx:', amountSats, 'sats to', PAYMENT_ADDR);
     const signedTxHex = await window.nintondo.createTx({
       to: PAYMENT_ADDR,
-      amount: Math.round(total * 1e8),
-      receiverToPayFee: false,
+      amount: amountSats,
+      receiverToPayFee: true,
       feeRate: 10
     });
     if(!signedTxHex) throw new Error('No transaction returned');
