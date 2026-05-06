@@ -350,7 +350,7 @@ footer p{font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:var(--mu
   <div class="mint-stats">
     <div class="mint-stat"><div class="mint-stat-val">10,000</div><div class="mint-stat-lbl">Total Supply</div></div>
     <div class="mint-stat"><div class="mint-stat-val">9,841</div><div class="mint-stat-lbl">Inscribed</div></div>
-    <div class="mint-stat"><div class="mint-stat-val">1 BEL</div><div class="mint-stat-lbl">Mint Price</div></div>
+    <div class="mint-stat"><div class="mint-stat-val" id="stat-price">5 BEL</div><div class="mint-stat-lbl">Mint Price</div></div>
     <div class="mint-stat"><div class="mint-stat-val">10</div><div class="mint-stat-lbl">Max / Tx</div></div>
   </div>
 </div>
@@ -432,7 +432,7 @@ footer p{font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:var(--mu
 <script>
 // ── CONFIG ──
 const PAYMENT_ADDR = 'bel1q0l2z7dqufnmgj4gn9z7z0peeq00t5mpzu257hx';
-const MINT_PRICE   = 1; // TEST - change back to 40 after test
+const MINT_PRICE   = 5; // TEST - change back to 40 after test
 const MAX_QTY      = 10;
 const CDN          = 'https://bells-mainnet-content.nintondo.io/content/';
 const WORKER_URL   = 'https://sba.superbellalliance.workers.dev';
@@ -511,7 +511,13 @@ async function doMint(){
     }, 1500);
   } catch(e){
     console.error(e);
-    addLog('❌ '+(e.message||String(e)),'err');
+    if(e.code === -32603 || (e.message && e.message.includes('buffer'))){
+      addLog('❌ Amount too low or insufficient UTXO. Try higher quantity.','err');
+    } else if(e.code === 4001 || (e.message && e.message.toLowerCase().includes('reject'))){
+      addLog('❌ Transaction rejected by user.','err');
+    } else {
+      addLog('❌ '+(e.message||String(e)),'err');
+    }
     btn.disabled = false;
   }
 }
@@ -664,6 +670,11 @@ function playBell(){
     osc.start(); osc.stop(ctx.currentTime+.8);
   }catch(e){}
 }
+
+// Set correct price display on load
+document.getElementById('price-val').textContent = (1 * MINT_PRICE) + ' BEL';
+if(document.getElementById('stat-price')) 
+  document.getElementById('stat-price').textContent = MINT_PRICE + ' BEL';
 
 // Init EmailJS
 (function initEJS(){
