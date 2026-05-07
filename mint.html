@@ -538,6 +538,7 @@ async function doMint(){
       // Broadcast - try multiple methods
       addLog('Broadcasting to network...','active');
       console.log('[SBA] signPsbt returned:', typeof signed, signed ? signed.slice(0,30) : 'null');
+      window._lastSignedPsbt = signed; // save for debug
 
       // Try to extract raw tx hex from signed PSBT
       let rawTxHex = null;
