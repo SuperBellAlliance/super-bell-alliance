@@ -418,8 +418,8 @@ footer p{font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:var(--mu
   <div class="cards-grid" id="cards-grid"></div>
   <div id="congrats" class="congrats">
     <div class="congrats-icon">🎉</div>
-    <div class="congrats-title">WELCOME TO THE ALLIANCE!</div>
-    <div class="congrats-msg">Your Super Bell heroes have been chosen! Our team will inscribe them to your wallet within <strong>24 hours</strong>.</div>
+    <div class="congrats-title">Welcome to SBA Alliance!</div>
+    <div class="congrats-msg">Congratulations! SBA inscriptions will be sent to your wallet manually. You will receive within <strong>36 hours</strong>. Thanks for your patience!</div>
     <div class="congrats-list" id="congrats-list"></div>
     <div class="congrats-btns">
       <a href="collection.html" class="btn-primary">View Collection</a>
@@ -640,6 +640,7 @@ async function revealCards(sbas){
           <div class="card-front-info">
             <div class="card-front-name">${sba.name}</div>
             <div class="card-front-rank">Rank #${sba.rank} · ${sba.score} pts · ${tier.label}</div>
+            ${sba.id ? `<a href="https://nintondo.io/bells/mainnet/inscription/${sba.id}" target="_blank" style="font-family:'Share Tech Mono',monospace;font-size:.65rem;color:var(--orange);text-decoration:none;display:block;margin-top:.3rem;">View Inscription ↗</a>` : ''}
           </div>
         </div>
       </div>`;
