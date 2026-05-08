@@ -128,60 +128,69 @@
 
     async fetchInscriptions(address) {
       console.log('[SBA] fetchInscriptions for:', address);
-      if (!window.nintondo) return [];
 
-      const methodsToTry = [
-        'getInscriptions', 'getMyInscriptions', 'inscriptions',
-        'getOrdinals', 'listInscriptions', 'getOwnedInscriptions',
+      // PRIMARY: Nintondo mainnet API (same one used for UTXOs - works!)
+      const NINTONDO_API = 'https://bells-mainnet-api.nintondo.io';
+      const apiEndpoints = [
+        `${NINTONDO_API}/address/${address}/inscriptions`,
+        `${NINTONDO_API}/address/${address}/inscription`,
+        `${NINTONDO_API}/addr/${address}/inscriptions`,
       ];
 
-      for (const method of methodsToTry) {
-        if (typeof window.nintondo[method] === 'function') {
-          try {
-            const result = await window.nintondo[method]();
-            if (result) {
-              let items = Array.isArray(result) ? result :
-                (result.list || result.inscriptions || result.data || result.result || null);
-              if (items && items.length > 0) {
-                const ids = this._extractIds(items);
-                if (ids.length > 0) {
-                  console.log('[SBA] Got', ids.length, 'inscriptions via', method);
-                  this.inscriptions = ids;
-                  return ids;
-                }
-              }
-            }
-          } catch (e) {
-            console.log('[SBA]', method, 'failed:', e.message);
-          }
-        }
-      }
-
-      // Fallback: API endpoints
-      const endpoints = [
-        SBA_PROXY + '/?path=/api/v1/address/' + address + '/inscriptions',
-        'https://corsproxy.io/?https://ord.nintondo.io/api/v1/address/' + address + '/inscriptions',
-      ];
-
-      for (const url of endpoints) {
+      for (const url of apiEndpoints) {
         try {
+          console.log('[SBA] Trying:', url);
           const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-          if (!res.ok) continue;
-          const data = await res.json();
-          const items = Array.isArray(data) ? data :
-            (data.list || data.inscriptions || data.data || []);
-          if (items.length > 0) {
-            const ids = this._extractIds(items);
-            if (ids.length > 0) {
-              this.inscriptions = ids;
-              return ids;
+          console.log('[SBA] Response:', res.status, url);
+          if (res.ok) {
+            const data = await res.json();
+            console.log('[SBA] Data sample:', JSON.stringify(data).slice(0,200));
+            const items = Array.isArray(data) ? data :
+              (data.list || data.inscriptions || data.data || data.result || []);
+            if (items.length > 0) {
+              const ids = this._extractIds(items);
+              if (ids.length > 0) {
+                console.log('[SBA] Got', ids.length, 'inscriptions via API');
+                this.inscriptions = ids;
+                return ids;
+              }
             }
           }
         } catch (e) {
-          console.log('[SBA] API endpoint failed:', e.message);
+          console.log('[SBA] API failed:', url, e.message);
         }
       }
 
+      // SECONDARY: Try wallet methods if available
+      if (window.nintondo) {
+        const methodsToTry = [
+          'getInscriptions', 'getMyInscriptions', 'inscriptions',
+          'getOrdinals', 'listInscriptions', 'getOwnedInscriptions',
+        ];
+        for (const method of methodsToTry) {
+          if (typeof window.nintondo[method] === 'function') {
+            try {
+              const result = await window.nintondo[method]();
+              if (result) {
+                let items = Array.isArray(result) ? result :
+                  (result.list || result.inscriptions || result.data || result.result || null);
+                if (items && items.length > 0) {
+                  const ids = this._extractIds(items);
+                  if (ids.length > 0) {
+                    console.log('[SBA] Got', ids.length, 'inscriptions via', method);
+                    this.inscriptions = ids;
+                    return ids;
+                  }
+                }
+              }
+            } catch (e) {
+              console.log('[SBA]', method, 'failed:', e.message);
+            }
+          }
+        }
+      }
+
+      console.log('[SBA] No inscriptions found for', address);
       return [];
     },
 
