@@ -229,6 +229,17 @@ body.light .prog-wrap{background:var(--bg)}
   flex-shrink:0;
 }
 .theme-toggle:hover{border-color:var(--orange);color:var(--orange)}
+
+.sold-badge{
+  position:absolute;top:8px;left:8px;
+  background:var(--orange);color:#000;
+  font-family:'Bebas Neue',sans-serif;
+  font-size:0.65rem;letter-spacing:0.12em;
+  padding:0.15rem 0.45rem;
+  border-radius:2px;
+  z-index:2;
+  pointer-events:none;
+}
 </style>
 </head>
 <body>
@@ -238,9 +249,6 @@ body.light .prog-wrap{background:var(--bg)}
   <div class="nav-links">
     <a href="index.html">Mint</a>
     <a href="collection.html" class="active">Collection</a>
-    <a href="dashboard.html">My Collection</a>
-    <a href="assemble.html">Assemble</a>
-    <a href="https://nintondo.io/bells" target="_blank">Nintondo</a>
   </div>
   <div class="nav-live">BELLSCOIN LIVE</div>
   <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
@@ -279,8 +287,7 @@ body.light .prog-wrap{background:var(--bg)}
     <div class="flbl" style="margin-bottom:0.4rem">// Status</div>
     <div class="fstatus">
       <button class="sbtn on" data-s="all" onclick="setStatus('all',this)">All</button>
-      <button class="sbtn" data-s="sold" onclick="setStatus('sold',this)">Inscribed</button>
-      <button class="sbtn" data-s="avail" onclick="setStatus('avail',this)">Pending</button>
+      <button class="sbtn" data-s="sold" onclick="setStatus('sold',this)">Sold</button>
     </div>
 
 
@@ -296,6 +303,8 @@ body.light .prog-wrap{background:var(--bg)}
       <option value="num_d">Number: High → Low</option>
       <option value="rank_a">Rarity: Rarest First</option>
       <option value="rank_d">Rarity: Common First</option>
+      <option value="insc_a">Oldest Inscription First</option>
+      <option value="insc_d">Newest Inscription First</option>
     </select>
 
     <div class="flbl" style="margin-top:0.25rem;margin-bottom:0.5rem">// Traits</div>
@@ -419,11 +428,12 @@ function rlabel(rank){
 function card(e){
   const rl = rlabel(e.rank);
   const dotCls = e.sold ? 'sold' : 'pend';
-  const dotTitle = e.sold ? 'Inscribed on Bellscoin' : 'Pending inscription ID';
+  const dotTitle = e.sold ? 'Sold' : 'Pending inscription ID';
 
   if(view==='list'){
     return`<div class="card" onclick="openModal(${e.num})">
       <div class="card-img-wrap">
+        ${e.sold ? '<div class="sold-badge">SOLD</div>' : ''}
         <img class="card-img" loading="lazy"
           src="${imgUrl(e)}"
           onerror="this.src=PH;this.classList.add('loaded')"
@@ -510,6 +520,8 @@ function applyFilters(){
     if(srt==='num_d') return b.num-a.num;
     if(srt==='rank_a') return (a.rank||99999)-(b.rank||99999);
     if(srt==='rank_d') return (b.rank||0)-(a.rank||0);
+    else if(srt==='insc_a') arr.sort((a,b)=>{ if(!a.id) return 1; if(!b.id) return -1; return a.id.localeCompare(b.id); });
+    else if(srt==='insc_d') arr.sort((a,b)=>{ if(!a.id) return 1; if(!b.id) return -1; return b.id.localeCompare(a.id); });
     return 0;
   });
   render(true);
@@ -610,7 +622,7 @@ function openModal(num){
   const gender = getGender(e);
   const genderBadge = `<span class="rbadge ${gender==='Female'?'epic':'common'}" style="margin-left:0.5rem;font-size:0.58rem">${gender==='Female'?'♀ Female':'♂ Male'}</span>`;
   document.getElementById('mstatus').innerHTML = isReal
-    ? `<span class="inscribed">⬡ Inscribed on Bellscoin</span>${genderBadge}`
+    ? `<span class="inscribed">⬡ Sold</span>${genderBadge}`
     : `<span class="available">○ Pending Inscription ID</span>${genderBadge}`;
 
   document.getElementById('mid').innerHTML = isReal
