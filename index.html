@@ -743,11 +743,8 @@ console.log('[SBA] Window globals exposed');
   </div>
   <div class="nav-links">
     <a href="mint.html">Mint</a>
-    <a href="collection.html">Gallery</a>
     <a href="#about">About</a>
     <a href="collection.html">Collection</a>
-    
-    
   </div>
   <div class="nav-pill">&#x25cf; Live on Bellscoin</div>
 </nav>
@@ -973,14 +970,26 @@ async function submitWhitelist() {
 </footer>
 
 <script>
-// Visitor counter using countapi
+// Visitor counter using GoatCounter
 (async function(){
   try {
-    const r = await fetch('https://api.countapi.xyz/hit/superbellalliance.github.io/visits');
+    // Track this visit
+    const gc = document.createElement('script');
+    gc.setAttribute('data-goatcounter', 'https://superbellalliance.goatcounter.com/count');
+    gc.async = true;
+    gc.src = '//gc.zgo.at/count.js';
+    document.head.appendChild(gc);
+
+    // Fetch visitor count
+    const r = await fetch('https://superbellalliance.goatcounter.com/counter/visits.json');
     const d = await r.json();
     const el = document.getElementById('visit-total');
-    if(el && d.value) el.textContent = d.value.toLocaleString();
-  } catch(e) { console.log('Counter unavailable'); }
+    if(el && d.count) el.textContent = parseInt(d.count).toLocaleString();
+  } catch(e) { 
+    console.log('Counter unavailable');
+    const el = document.getElementById('visit-total');
+    if(el) el.textContent = '—';
+  }
 })();
 </script>
 
