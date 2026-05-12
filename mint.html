@@ -395,6 +395,16 @@ footer p{font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:var(--mu
   .guide-step{ width:100%; max-width:280px; }
 }
 
+
+.card-insc-link{
+  display:block;margin-top:.4rem;
+  font-family:'Share Tech Mono',monospace;
+  font-size:.6rem;color:var(--orange);
+  text-decoration:none;letter-spacing:.05em;
+  opacity:0.85;transition:opacity .2s;
+}
+.card-insc-link:hover{opacity:1;text-decoration:underline;}
+
 </style>
 <script src="wallet.js"></script>
 <script>
@@ -576,7 +586,7 @@ footer p{font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:var(--mu
   <div id="congrats" class="congrats">
     <div class="congrats-icon">🎉</div>
     <div class="congrats-title">Welcome to SBA Alliance!</div>
-    <div class="congrats-msg">Congratulations! SBA inscriptions will be sent to your wallet manually. You will receive within <strong>36 hours</strong>. Thanks for your patience!</div>
+    <div class="congrats-msg">Congratulations! SBA inscriptions will be sent to your wallet manually. You will receive within <strong>24 hours</strong>. Thanks for your patience!</div>
     <div class="congrats-list" id="congrats-list"></div>
     <div class="congrats-btns">
       <a href="collection.html" class="btn-primary">View Collection</a>
@@ -791,11 +801,10 @@ async function revealCards(sbas){
           <div class="card-back-text">SUPER BELL</div>
         </div>
         <div class="card-face card-front">
-          <div class="rarity-tier ${tier.cls}">${tier.label}</div>
           ${sba.id ? `<img class="card-front-img" src="${CDN+sba.id}" alt="${sba.name}" onerror="this.style.background='var(--bg3)'"/>` : `<div class="card-front-img" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.8rem;">✦</div>`}
           <div class="card-front-info">
             <div class="card-front-name">${sba.name}</div>
-            <div class="card-front-rank">Rank #${sba.rank} · ${sba.score} pts · ${tier.label}</div>
+            <div class="card-front-rank">Rank #${sba.rank} · ${sba.score} pts</div>
             ${sba.id ? `<a href="https://nintondo.io/bells/mainnet/inscription/${sba.id}" target="_blank" style="font-family:'Share Tech Mono',monospace;font-size:.65rem;color:var(--orange);text-decoration:none;display:block;margin-top:.3rem;">View Inscription ↗</a>` : ''}
           </div>
         </div>
@@ -824,7 +833,11 @@ function showCongrats(sbas){
   const list = document.getElementById('congrats-list');
   list.innerHTML = sbas.map(s=>{
     const t = getRarityTier(s.rank);
-    return `<div class="congrats-item"><span class="ci-name">${s.name}</span><span class="ci-rank">${t.label} · Rank #${s.rank}</span></div>`;
+    return `<div class="congrats-item">
+      <span class="ci-name">${s.name}</span>
+      <span class="ci-rank">Rank #${s.rank}</span>
+      ${s.id ? `<a class="ci-link" href="https://nintondo.io/bells/mainnet/inscription/${s.id}" target="_blank">⬡ View Inscription →</a>` : ''}
+    </div>`;
   }).join('');
   document.getElementById('congrats').classList.add('show');
   document.getElementById('congrats').scrollIntoView({behavior:'smooth'});
