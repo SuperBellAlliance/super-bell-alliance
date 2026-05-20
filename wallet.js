@@ -1,8 +1,12 @@
 /**
  * ============================================================
- * SBA WALLET - Based on official Nintondo SDK docs v3
- * Uses window.nintondo.getInscriptions() for inscription fetching
- * Same method used by nintondo.io itself — bypasses CORS entirely
+ * SBA WALLET v7
+ * Inscription fetching — UTXO matching strategy:
+ *   1. Fetch UTXOs via CF Worker /utxo proxy (no CORS issues)
+ *   2. Build inscription ID: txid + "i" + vout for each UTXO
+ *   3. Match against SBA_LOOKUP hardcoded in the page
+ *   4. Fallback: try ord.nintondo.io via /inscriptions proxy
+ * This works completely offline from ord.nintondo.io!
  * ============================================================
  */
 
@@ -10,13 +14,12 @@
   'use strict';
 
   const NINTONDO_INSTALL = 'https://chromewebstore.google.com/detail/nintondo-wallet/akkmagafhjjjjclaejjomkeccmjhdkpa';
-  const SBA_PROXY = 'https://sba.superbellalliance.workers.dev';
+  const SBA_WORKER = 'https://sba.superbellalliance.workers.dev';
 
-  // ── Wait for nintondo to inject ──────────────────────────
   async function waitForNintondo(timeoutMs) {
     timeoutMs = timeoutMs || 10000;
-    if(document.readyState !== 'complete'){
-      await new Promise(function(r){ window.addEventListener('load', r, {once:true}); });
+    if (document.readyState !== 'complete') {
+      await new Promise(function (r) { window.addEventListener('load', r, { once: true }); });
     }
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -37,11 +40,9 @@
 
     async connect() {
       console.log('[SBA] connect() called...');
-
       const nintondo = await waitForNintondo(10000);
 
       if (!nintondo) {
-        console.error('[SBA] Nintondo not detected');
         const install = confirm(
           'Nintondo Wallet not detected!\n\n' +
           'Make sure:\n' +
@@ -70,7 +71,6 @@
         }
 
         return address;
-
       } catch (e) {
         console.error('[SBA] connect() error:', e);
         if (e.code === 4001 || (e.message && e.message.toLowerCase().includes('reject'))) {
@@ -98,7 +98,6 @@
     async sendPayment(toAddress, belAmount) {
       if (!window.nintondo) throw new Error('Wallet not connected');
       const satoshis = Math.round(belAmount * 100000000);
-      console.log('[SBA] createTx:', belAmount, 'BEL to', toAddress);
       return await window.nintondo.createTx({
         to: toAddress,
         amount: satoshis,
@@ -119,86 +118,106 @@
     },
 
     /**
-     * fetchInscriptions — uses window.nintondo.getInscriptions(offset, limit)
-     * This is the SAME method nintondo.io uses on its own profile page.
-     * The wallet extension handles the API call internally — no CORS issues.
-     * Paginates through all pages until done.
+     * fetchInscriptions
+     *
+     * PRIMARY STRATEGY — UTXO Matching (no ord.nintondo.io needed):
+     *   Each inscription lives in a UTXO. The inscription ID is:
+     *   txid + "i" + vout  (e.g. "abc123...i0")
+     *   We fetch all UTXOs for the address, build the ID for each one,
+     *   then check if it exists in SBA_LOOKUP (hardcoded in the page).
+     *   This works even when ord.nintondo.io is offline!
+     *
+     * FALLBACK — /inscriptions proxy via CF Worker
      */
     async fetchInscriptions(address) {
       console.log('[SBA] fetchInscriptions for:', address);
 
-      if (!window.nintondo) {
-        console.warn('[SBA] window.nintondo not available for fetchInscriptions');
-        return [];
-      }
-
-      // Check if getInscriptions is available on the wallet
-      if (typeof window.nintondo.getInscriptions !== 'function') {
-        console.warn('[SBA] window.nintondo.getInscriptions not available on this wallet version');
-        console.warn('[SBA] Available methods:', Object.keys(window.nintondo));
-        return [];
-      }
-
-      const allIds = [];
-      const PAGE_SIZE = 100;
-      let offset = 0;
-      let total = null;
-
+      // ── Primary: UTXO matching ────────────────────────────────
       try {
-        while (true) {
-          console.log('[SBA] Fetching inscriptions offset:', offset);
-          const result = await window.nintondo.getInscriptions(offset, PAGE_SIZE);
-
-          // result shape: { total: N, list: [...] } or just an array
-          let items = [];
-          if (result) {
-            if (Array.isArray(result)) {
-              items = result;
-              // If no total known, stop when we get fewer than PAGE_SIZE
-              if (items.length < PAGE_SIZE) {
-                allIds.push(...this._extractIds(items));
-                break;
-              }
-            } else {
-              if (total === null) total = result.total || 0;
-              items = result.list || result.inscriptions || result.data || [];
-            }
-          }
-
-          const ids = this._extractIds(items);
-          allIds.push(...ids);
-
-          console.log('[SBA] Got', ids.length, 'inscriptions this page, total so far:', allIds.length);
-
-          offset += PAGE_SIZE;
-
-          // Stop if we've fetched everything
-          if (total !== null && allIds.length >= total) break;
-          if (items.length < PAGE_SIZE) break;
-          if (items.length === 0) break;
+        const ids = await this._fetchViaUtxoMatch(address);
+        if (ids && ids.length > 0) {
+          console.log('[SBA] Got', ids.length, 'inscriptions via UTXO matching');
+          this.inscriptions = ids;
+          return ids;
         }
-
-        console.log('[SBA] Total inscriptions fetched:', allIds.length);
-        this.inscriptions = allIds;
-        return allIds;
-
+        console.log('[SBA] UTXO match found 0 SBA inscriptions, trying API fallback...');
       } catch (e) {
-        console.error('[SBA] getInscriptions failed:', e.message || e);
+        console.warn('[SBA] UTXO matching failed:', e.message);
+      }
+
+      // ── Fallback: CF Worker /inscriptions proxy ───────────────
+      try {
+        const ids = await this._fetchViaWorker(address);
+        if (ids && ids.length > 0) {
+          console.log('[SBA] Got', ids.length, 'inscriptions via CF Worker');
+          this.inscriptions = ids;
+          return ids;
+        }
+      } catch (e) {
+        console.warn('[SBA] CF Worker fetch failed:', e.message);
+      }
+
+      console.log('[SBA] No inscriptions found for', address);
+      return [];
+    },
+
+    /**
+     * UTXO Matching Strategy
+     * Fetch UTXOs → build inscription ID (txid+i+vout) → return all IDs
+     * Dashboard/Assemble pages match these against SBA_LOOKUP themselves
+     */
+    async _fetchViaUtxoMatch(address) {
+      console.log('[SBA] Fetching UTXOs via CF Worker for:', address);
+
+      const url = `${SBA_WORKER}/utxo?address=${encodeURIComponent(address)}`;
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+
+      if (!res.ok) throw new Error('UTXO fetch failed: ' + res.status);
+
+      const utxos = await res.json();
+      if (!Array.isArray(utxos) || utxos.length === 0) {
+        console.log('[SBA] No UTXOs returned');
         return [];
       }
+
+      console.log('[SBA] Got', utxos.length, 'UTXOs, building inscription IDs...');
+
+      // Build inscription ID from each UTXO: txid + "i" + vout
+      const ids = utxos.map(u => u.txid + 'i' + u.vout);
+      console.log('[SBA] Built', ids.length, 'potential inscription IDs from UTXOs');
+
+      return ids;
+    },
+
+    // ── CF Worker /inscriptions fallback ───────────────────────
+    async _fetchViaWorker(address) {
+      const allIds = [];
+      let offset = 0;
+      const limit = 100;
+
+      while (true) {
+        const url = `${SBA_WORKER}/inscriptions?address=${encodeURIComponent(address)}&offset=${offset}&limit=${limit}`;
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) break;
+        const data = await res.json();
+        const items = Array.isArray(data) ? data : (data.list || data.inscriptions || data.data || []);
+        const ids = this._extractIds(items);
+        allIds.push(...ids);
+        if (items.length < limit) break;
+        offset += limit;
+      }
+
+      return allIds;
     },
 
     _extractIds(items) {
       return items.map(function (item) {
         if (typeof item === 'string') return item;
-        return item.id || item.inscription_id || item.inscriptionId ||
-          item.inscription || item.txid || null;
+        return item.id || item.inscription_id || item.inscriptionId || item.txid || null;
       }).filter(Boolean);
     },
 
-    isInstalled() {
-      return typeof window.nintondo !== 'undefined';
-    },
+    isInstalled() { return typeof window.nintondo !== 'undefined'; },
 
     onAccountChange(callback) {
       if (window.nintondo && window.nintondo.on) {
