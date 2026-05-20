@@ -607,47 +607,9 @@ window._realConnectWallet = async function(){
   if(balSub) balSub.textContent = balanceBEL + ' BEL';
   console.log('Balance:', balanceBEL, 'BEL');
   
-  // Show maintenance message instead of failed API calls
-  const grid = document.getElementById('nft-grid');
-  if(grid){
-    grid.innerHTML = `
-      <div style="grid-column:1/-1;padding:3rem 2rem;text-align:center;background:rgba(255,107,26,0.04);border:1px solid rgba(255,107,26,0.2)">
-        <div style="font-size:2rem;margin-bottom:1rem">⚙️</div>
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:0.08em;color:var(--orange);margin-bottom:0.5rem">
-          INSCRIPTION DISPLAY — API MAINTENANCE
-        </div>
-        <div style="font-size:0.88rem;color:#B0B0C8;line-height:1.7;max-width:560px;margin:0 auto">
-          <span id="api-status-msg">Fetching your Super Bell heroes from the blockchain...</span>
-          <br/><br/>
-          <a href="collection.html" 
-             style="color:var(--orange);text-decoration:none;border-bottom:1px solid var(--orange);padding-bottom:1px">
-            Browse the full SBA collection →
-          </a>
-        </div>
-      </div>
-    `;
-  }
-  
-  // Hide stats that depend on inscription data
-  const statBest = document.getElementById('stat-best-rank');
-  const statBestName = document.getElementById('stat-best-name');
-  const statLeg = document.getElementById('stat-legendary');
-  const statEpic = document.getElementById('stat-epic');
-  const statAvg = document.getElementById('stat-avg-rank');
-  const statOwned = document.getElementById('stat-owned');
-  const statPct = document.getElementById('stat-pct');
-  
-  if(statOwned) statOwned.textContent = '—';
-  if(statPct) statPct.textContent = 'Inscription data unavailable';
-  if(statBest) statBest.textContent = '—';
-  if(statBestName) statBestName.textContent = 'Awaiting API';
-  if(statLeg) statLeg.textContent = '—';
-  if(statEpic) statEpic.textContent = 'Awaiting API';
-  if(statAvg) statAvg.textContent = '—';
-  
-  // Hide rcnt counter
-  const rcnt = document.getElementById('rcnt');
-  if(rcnt) rcnt.textContent = '0';
+  // Fetch inscriptions using wallet provider
+  showLoading('Fetching your SBA heroes...');
+  loadCollection(addr);
 }
 
 async function loadCollection(addr){
@@ -877,7 +839,6 @@ function setRarity(r, btn){
 function getSorted(){
   const srt = document.getElementById('srt').value;
   let col = [...myCollection];
-  // Apply rarity filter
   if(activeRarity !== 'all'){
     col = col.filter(e => rlabelStr(e.rank) === activeRarity);
   }
