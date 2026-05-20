@@ -296,7 +296,6 @@ body.light
     <div class="flbl" style="margin-bottom:0.4rem">// Status</div>
     <div class="fstatus" style="margin-bottom:1rem">
       <button class="sbtn on" data-s="all" onclick="setStatus('all',this)">All</button>
-      <button class="sbtn" data-s="sold" onclick="setStatus('sold',this)">Sold</button>
     </div>
     <div class="flbl" style="margin-bottom:0.4rem">// Gender</div>
     <div class="fstatus" style="margin-bottom:1rem">
@@ -555,8 +554,8 @@ function applyFilters(){
     if(srt==='num_d') return b.num-a.num;
     if(srt==='rank_a') return (a.rank||99999)-(b.rank||99999);
     if(srt==='rank_d') return (b.rank||0)-(a.rank||0);
-    else if(srt==='insc_a') filtered.sort((a,b)=>{ if(!a.id) return 1; if(!b.id) return -1; return a.id.localeCompare(b.id); });
-    else if(srt==='insc_d') filtered.sort((a,b)=>{ if(!a.id) return 1; if(!b.id) return -1; return b.id.localeCompare(a.id); });
+    else if(srt==='insc_a') filtered.sort((a,b)=>{ return (a.num||99999)-(b.num||99999); });
+    else if(srt==='insc_d') filtered.sort((a,b)=>{ return (b.num||0)-(a.num||0); });
     return 0;
   });
   render(true);

@@ -33,6 +33,16 @@ nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-co
 .theme-toggle{width:32px;height:32px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center;transition:all 0.2s}
 .theme-toggle:hover{border-color:var(--orange);color:var(--orange)}
 
+/* RARITY FILTERS */
+.rarity-filters{display:flex;flex-wrap:wrap;gap:0.5rem;padding:0.75rem 1.5rem;background:var(--bg2);border-bottom:1px solid var(--border)}
+.rfbtn{padding:0.3rem 0.9rem;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:0.75rem;font-family:'Share Tech Mono',monospace;letter-spacing:0.05em;border-radius:2px;transition:all 0.2s}
+.rfbtn.on,.rfbtn:hover{background:var(--orange);color:#000;border-color:var(--orange)}
+.rfbtn.legendary.on{background:#FFD700;color:#000;border-color:#FFD700}
+.rfbtn.epic.on{background:#9B59B6;color:#fff;border-color:#9B59B6}
+.rfbtn.rare.on{background:#3498DB;color:#fff;border-color:#3498DB}
+.rfbtn.uncommon.on{background:#2ECC71;color:#000;border-color:#2ECC71}
+.rfbtn.common.on{background:var(--muted);color:#fff;border-color:var(--muted)}
+
 /* LIGHT MODE */
 body.light{--bg:#F5F5F0;--bg2:#EEEDE8;--bg3:#E5E4DE;--panel:#FFFFFF;--border:#D8D7D0;--bord-o:rgba(255,107,26,0.3);--text:#1A1A14;--muted:#888878}
 body.light nav{background:rgba(245,245,240,0.96)}
@@ -486,6 +496,14 @@ footer p{font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:#A0A0B8
 
   <!-- Toolbar -->
   <div class="sba-label">SUPER BELL ALLIANCE HEROES</div>
+  <div class="rarity-filters" id="rarity-filters">
+    <button class="rfbtn on" data-r="all" onclick="setRarity('all',this)">All</button>
+    <button class="rfbtn legendary" data-r="Legendary" onclick="setRarity('Legendary',this)">⭐ Legendary</button>
+    <button class="rfbtn epic" data-r="Epic" onclick="setRarity('Epic',this)">💜 Epic</button>
+    <button class="rfbtn rare" data-r="Rare" onclick="setRarity('Rare',this)">💙 Rare</button>
+    <button class="rfbtn uncommon" data-r="Uncommon" onclick="setRarity('Uncommon',this)">💚 Uncommon</button>
+    <button class="rfbtn common" data-r="Common" onclick="setRarity('Common',this)">⬜ Common</button>
+  </div>
   <div class="toolbar">
     <div class="toolbar-left">
       <span class="rcnt">Showing <span id="rcnt">0</span> heroes</span>
@@ -660,6 +678,7 @@ const SBA_LOOKUP = {"2dec36c8fb4887639b44f42943622b1872a3f92ffa8b29953fe2057c0bb
 let myCollection = []; // [{id, num, name, rank, score, traits}]
 let walletAddr = '';
 let view = 'grid';
+let activeRarity = 'all';
 
 // ── THEME ──
 function toggleTheme(){
@@ -839,9 +858,29 @@ function rlabel(rank){
   return {l:'Common',c:'common'};
 }
 
+function rlabelStr(rank){
+  if(!rank) return 'Common';
+  if(rank<=500) return 'Legendary';
+  if(rank<=1500) return 'Epic';
+  if(rank<=3000) return 'Rare';
+  if(rank<=6000) return 'Uncommon';
+  return 'Common';
+}
+
+function setRarity(r, btn){
+  activeRarity = r;
+  document.querySelectorAll('.rfbtn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  renderGrid();
+}
+
 function getSorted(){
   const srt = document.getElementById('srt').value;
-  const col = [...myCollection];
+  let col = [...myCollection];
+  // Apply rarity filter
+  if(activeRarity !== 'all'){
+    col = col.filter(e => rlabelStr(e.rank) === activeRarity);
+  }
   col.sort((a,b)=>{
     if(srt==='num_a') return a.num-b.num;
     if(srt==='num_d') return b.num-a.num;

@@ -1,7 +1,8 @@
 /**
  * ============================================================
  * SBA WALLET - Based on official Nintondo SDK docs v3
- * https://docs.nintondo.io/docs/nintondo-wallet/nintondo-sdk/provider
+ * Uses window.nintondo.getInscriptions() for inscription fetching
+ * Same method used by nintondo.io itself — bypasses CORS entirely
  * ============================================================
  */
 
@@ -12,11 +13,8 @@
   const SBA_PROXY = 'https://sba.superbellalliance.workers.dev';
 
   // ── Wait for nintondo to inject ──────────────────────────
-  // The extension injects window.nintondo after page load.
-  // We poll for up to 10 seconds.
   async function waitForNintondo(timeoutMs) {
     timeoutMs = timeoutMs || 10000;
-    // Wait for DOM to be ready first
     if(document.readyState !== 'complete'){
       await new Promise(function(r){ window.addEventListener('load', r, {once:true}); });
     }
@@ -58,16 +56,11 @@
 
       try {
         console.log('[SBA] Calling nintondo.connect("bellsMainnet")...');
-
-        // Official API: nintondo.connect(networkType)
         const address = await nintondo.connect('bellsMainnet');
-
         if (!address) throw new Error('No address returned from connect()');
-
         console.log('[SBA] Connected:', address);
         this.addr = address;
 
-        // Get balance
         try {
           const sats = await nintondo.getBalance();
           this.balance = sats;
@@ -106,7 +99,6 @@
       if (!window.nintondo) throw new Error('Wallet not connected');
       const satoshis = Math.round(belAmount * 100000000);
       console.log('[SBA] createTx:', belAmount, 'BEL to', toAddress);
-      // Official API: nintondo.createTx(payload)
       return await window.nintondo.createTx({
         to: toAddress,
         amount: satoshis,
@@ -126,72 +118,74 @@
       this.inscriptions = [];
     },
 
+    /**
+     * fetchInscriptions — uses window.nintondo.getInscriptions(offset, limit)
+     * This is the SAME method nintondo.io uses on its own profile page.
+     * The wallet extension handles the API call internally — no CORS issues.
+     * Paginates through all pages until done.
+     */
     async fetchInscriptions(address) {
       console.log('[SBA] fetchInscriptions for:', address);
 
-      // PRIMARY: Nintondo mainnet API (same one used for UTXOs - works!)
-      const NINTONDO_API = 'https://bells-mainnet-api.nintondo.io';
-      const apiEndpoints = [
-        `${NINTONDO_API}/address/${address}/inscriptions`,
-        `${NINTONDO_API}/address/${address}/inscription`,
-        `${NINTONDO_API}/addr/${address}/inscriptions`,
-      ];
-
-      for (const url of apiEndpoints) {
-        try {
-          console.log('[SBA] Trying:', url);
-          const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-          console.log('[SBA] Response:', res.status, url);
-          if (res.ok) {
-            const data = await res.json();
-            console.log('[SBA] Data sample:', JSON.stringify(data).slice(0,200));
-            const items = Array.isArray(data) ? data :
-              (data.list || data.inscriptions || data.data || data.result || []);
-            if (items.length > 0) {
-              const ids = this._extractIds(items);
-              if (ids.length > 0) {
-                console.log('[SBA] Got', ids.length, 'inscriptions via API');
-                this.inscriptions = ids;
-                return ids;
-              }
-            }
-          }
-        } catch (e) {
-          console.log('[SBA] API failed:', url, e.message);
-        }
+      if (!window.nintondo) {
+        console.warn('[SBA] window.nintondo not available for fetchInscriptions');
+        return [];
       }
 
-      // SECONDARY: Try wallet methods if available
-      if (window.nintondo) {
-        const methodsToTry = [
-          'getInscriptions', 'getMyInscriptions', 'inscriptions',
-          'getOrdinals', 'listInscriptions', 'getOwnedInscriptions',
-        ];
-        for (const method of methodsToTry) {
-          if (typeof window.nintondo[method] === 'function') {
-            try {
-              const result = await window.nintondo[method]();
-              if (result) {
-                let items = Array.isArray(result) ? result :
-                  (result.list || result.inscriptions || result.data || result.result || null);
-                if (items && items.length > 0) {
-                  const ids = this._extractIds(items);
-                  if (ids.length > 0) {
-                    console.log('[SBA] Got', ids.length, 'inscriptions via', method);
-                    this.inscriptions = ids;
-                    return ids;
-                  }
-                }
-              }
-            } catch (e) {
-              console.log('[SBA]', method, 'failed:', e.message);
-            }
-          }
-        }
+      // Check if getInscriptions is available on the wallet
+      if (typeof window.nintondo.getInscriptions !== 'function') {
+        console.warn('[SBA] window.nintondo.getInscriptions not available on this wallet version');
+        console.warn('[SBA] Available methods:', Object.keys(window.nintondo));
+        return [];
       }
 
-      console.log('[SBA] No inscriptions found for', address);
-      return [];
+      const allIds = [];
+      const PAGE_SIZE = 100;
+      let offset = 0;
+      let total = null;
+
+      try {
+        while (true) {
+          console.log('[SBA] Fetching inscriptions offset:', offset);
+          const result = await window.nintondo.getInscriptions(offset, PAGE_SIZE);
+
+          // result shape: { total: N, list: [...] } or just an array
+          let items = [];
+          if (result) {
+            if (Array.isArray(result)) {
+              items = result;
+              // If no total known, stop when we get fewer than PAGE_SIZE
+              if (items.length < PAGE_SIZE) {
+                allIds.push(...this._extractIds(items));
+                break;
+              }
+            } else {
+              if (total === null) total = result.total || 0;
+              items = result.list || result.inscriptions || result.data || [];
+            }
+          }
+
+          const ids = this._extractIds(items);
+          allIds.push(...ids);
+
+          console.log('[SBA] Got', ids.length, 'inscriptions this page, total so far:', allIds.length);
+
+          offset += PAGE_SIZE;
+
+          // Stop if we've fetched everything
+          if (total !== null && allIds.length >= total) break;
+          if (items.length < PAGE_SIZE) break;
+          if (items.length === 0) break;
+        }
+
+        console.log('[SBA] Total inscriptions fetched:', allIds.length);
+        this.inscriptions = allIds;
+        return allIds;
+
+      } catch (e) {
+        console.error('[SBA] getInscriptions failed:', e.message || e);
+        return [];
+      }
     },
 
     _extractIds(items) {
@@ -213,7 +207,6 @@
     }
   };
 
-  // Log detection status
   if (typeof window.nintondo !== 'undefined') {
     console.log('[SBA] Nintondo already injected on load');
   } else {
